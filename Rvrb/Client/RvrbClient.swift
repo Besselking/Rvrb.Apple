@@ -107,14 +107,14 @@ final class RvrbClient {
         usersById[id]
     }
 
-    /// The playing DJ shows as DJing; anyone else by their vote on the track, then by being on the decks.
+    /// Only the DJ playing now shows as DJing; anyone else (DJs waiting their turn too) by their vote on the track.
     func activity(of userId: String) -> UserActivity {
         if djIds.first == userId { return .djing }
         if let vote = voters[userId] {
             if vote.dope { return .doped }
             if vote.nope { return .noped }
         }
-        return djIds.contains(userId) ? .djing : .listening
+        return .listening
     }
 
     /// The user's picture for what they're doing (their DJ, dope or nope image), falling back to their avatar.

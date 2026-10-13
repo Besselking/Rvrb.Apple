@@ -28,7 +28,7 @@ struct ChatMessage: Identifiable {
 /// What a user is doing, shown on their avatar.
 enum UserActivity {
     case listening
-    /// On the decks (the first DJ is playing).
+    /// Playing the current track (the first DJ).
     case djing
     case doped
     case noped
