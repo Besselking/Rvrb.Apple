@@ -14,9 +14,10 @@ struct LoginView: View {
             VStack(spacing: 24) {
                 Spacer(minLength: 40)
 
-                Image(systemName: "waveform.circle.fill")
-                    .font(.system(size: 72))
-                    .foregroundStyle(.tint)
+                Image("Logo")
+                    .resizable()
+                    .frame(width: 112, height: 112)
+                    .accessibilityHidden(true)
 
                 VStack(spacing: 8) {
                     Text("Rvrb")
