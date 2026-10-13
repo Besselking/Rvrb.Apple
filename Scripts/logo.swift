@@ -3,7 +3,7 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-// Rvrb logo: a sound source with three echo arcs (reverb), white on the app's purple.
+// Rvrb logo: an eighth note with two echo arcs (reverb), white on the app's purple.
 // usage: swift Scripts/logo.swift Rvrb/Assets.xcassets
 let assets = URL(fileURLWithPath: CommandLine.arguments[1])
 
@@ -32,19 +32,41 @@ func draw(_ ctx: CGContext, size: CGFloat, rounded: Bool) {
     ctx.drawLinearGradient(gradient, start: CGPoint(x: body.minX, y: body.maxY), end: CGPoint(x: body.maxX, y: body.minY), options: [])
 
     let w = body.width
-    let center = CGPoint(x: body.minX + w * 0.30, y: body.midY)
+    let origin = CGPoint(x: body.minX, y: body.minY)
+    func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: origin.x + w * x, y: origin.y + w * y) }
 
-    // The source.
     ctx.setFillColor(color(0xFFFFFF))
-    let dot = w * 0.08
-    ctx.fillEllipse(in: CGRect(x: center.x - dot, y: center.y - dot, width: dot * 2, height: dot * 2))
+    ctx.setStrokeColor(color(0xFFFFFF))
 
-    // The echoes, fading out.
+    // An eighth note: a tilted head, a stem, and a flag.
+    let head = p(0.33, 0.33)
+    ctx.saveGState()
+    ctx.translateBy(x: head.x, y: head.y)
+    ctx.rotate(by: .pi * 0.16)
+    ctx.fillEllipse(in: CGRect(x: -w * 0.115, y: -w * 0.08, width: w * 0.23, height: w * 0.16))
+    ctx.restoreGState()
+
+    let stemX = head.x + w * 0.085
+    let stemWidth = w * 0.05
+    let stemTop = p(0, 0.78).y
+    ctx.fill(CGRect(x: stemX, y: head.y + w * 0.02, width: stemWidth, height: stemTop - head.y - w * 0.02))
+
+    let flag = CGMutablePath()
+    flag.move(to: CGPoint(x: stemX + stemWidth / 2, y: stemTop))
+    flag.addCurve(to: CGPoint(x: stemX + w * 0.16, y: stemTop - w * 0.27),
+                  control1: CGPoint(x: stemX + w * 0.04, y: stemTop - w * 0.10),
+                  control2: CGPoint(x: stemX + w * 0.20, y: stemTop - w * 0.12))
+    ctx.setLineWidth(w * 0.05)
     ctx.setLineCap(.round)
-    ctx.setLineWidth(w * 0.06)
-    for (radius, alpha) in [(0.19, 1.0), (0.30, 0.72), (0.41, 0.45)] {
+    ctx.addPath(flag)
+    ctx.strokePath()
+
+    // Its echoes, fading out.
+    let center = p(0.50, 0.50)
+    ctx.setLineWidth(w * 0.055)
+    for (radius, alpha) in [(0.22, 0.85), (0.33, 0.5)] {
         ctx.setStrokeColor(color(0xFFFFFF, alpha))
-        ctx.addArc(center: center, radius: w * radius, startAngle: -.pi * 0.27, endAngle: .pi * 0.27, clockwise: false)
+        ctx.addArc(center: center, radius: w * radius, startAngle: -.pi * 0.25, endAngle: .pi * 0.25, clockwise: false)
         ctx.strokePath()
     }
 }
