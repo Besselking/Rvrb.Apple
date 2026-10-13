@@ -1,0 +1,68 @@
+import SwiftUI
+
+/// The DJs in play order (the first is playing) and everyone else listening.
+struct PeopleView: View {
+    let client: RvrbClient
+
+    var body: some View {
+        List {
+            Section("DJs (\(client.djIds.count))") {
+                if client.djIds.isEmpty {
+                    Text("No one is DJing")
+                        .foregroundStyle(.secondary)
+                }
+
+                ForEach(Array(client.djIds.enumerated()), id: \.element) { index, id in
+                    PersonRow(name: client.name(for: id), url: client.user(id)?.imageURL, seed: id,
+                              detail: index == 0 ? "Playing" : "#\(index + 1)", isMe: id == client.me.id)
+                }
+
+                if client.channel != nil {
+                    Button {
+                        Task { await client.toggleDJ() }
+                    } label: {
+                        Label(client.isDJ ? "Step Down" : "Step Up",
+                              systemImage: client.isDJ ? "arrow.down.circle" : "arrow.up.circle")
+                    }
+                }
+            }
+
+            Section("Listeners (\(client.listeners.count))") {
+                ForEach(client.listeners) { user in
+                    PersonRow(name: user.name, url: user.imageURL, seed: user.id, detail: nil, isMe: user.id == client.me.id)
+                }
+            }
+        }
+        #if os(macOS)
+        .listStyle(.sidebar)
+        #endif
+    }
+}
+
+private struct PersonRow: View {
+    let name: String
+    let url: URL?
+    let seed: String
+    let detail: String?
+    let isMe: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Avatar(name: name, url: url, seed: seed)
+            Text(name)
+                .fontWeight(isMe ? .semibold : .regular)
+                .lineLimit(1)
+            if isMe {
+                Text("You")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if let detail {
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}

@@ -1,0 +1,157 @@
+import SwiftUI
+
+/// The joined channel: now playing with votes, the chat, and the message box. People are in an inspector; the
+/// queue, track search and Spotify device in sheets.
+struct RoomView: View {
+    let client: RvrbClient
+
+    #if os(macOS)
+    @State private var showsPeople = true
+    #else
+    @State private var showsPeople = false
+    #endif
+    @State private var sheet: Sheet?
+
+    enum Sheet: String, Identifiable {
+        case queue, search, devices
+        var id: String { rawValue }
+    }
+
+    private var title: String {
+        client.channel?.title ?? client.joining?.title ?? "Channel"
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ConnectionBanner(client: client)
+            NowPlayingView(client: client)
+            Divider()
+
+            if client.channel == nil && client.joining != nil {
+                ProgressView("Joining \(title)…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ChatView(client: client)
+            }
+
+            ComposerView(client: client)
+        }
+        .navigationTitle(title)
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .toolbar { toolbar }
+        .inspector(isPresented: $showsPeople) {
+            PeopleView(client: client)
+                .inspectorColumnWidth(min: 200, ideal: 240, max: 340)
+        }
+        .sheet(item: $sheet) { sheet in
+            switch sheet {
+            case .queue: QueueView(client: client)
+            case .search: SearchSheet(client: client)
+            case .devices: DevicesView(client: client)
+            }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbar: some ToolbarContent {
+        ToolbarItemGroup(placement: .primaryAction) {
+            Button {
+                Task { await client.toggleDJ() }
+            } label: {
+                Label(client.isDJ ? "Step Down" : "Step Up",
+                      systemImage: client.isDJ ? "arrow.down.circle.fill" : "arrow.up.circle")
+            }
+            .help(client.isDJ ? "Leave the decks" : "Join the decks and play from your queue")
+            .disabled(client.channel == nil)
+
+            Button {
+                sheet = .queue
+            } label: {
+                Label("Queue", systemImage: "list.bullet")
+            }
+            .help("Your DJ queue")
+
+            Button {
+                showsPeople.toggle()
+            } label: {
+                Label("People", systemImage: "person.2")
+            }
+            .help("DJs and listeners")
+
+            Menu {
+                Button("Add Tracks…", systemImage: "plus") { sheet = .search }
+                Button("Spotify Device…", systemImage: "hifispeaker") { sheet = .devices }
+
+                Toggle(isOn: Binding(get: { client.player.isEnabled },
+                                     set: { enabled in Task { await client.player.setEnabled(enabled) } })) {
+                    Label("Play on Spotify", systemImage: "play.circle")
+                }
+
+                Button("Resync Playback", systemImage: "arrow.triangle.2.circlepath") {
+                    Task { await client.player.resync() }
+                }
+                .disabled(client.nowPlaying == nil || !client.player.isEnabled)
+
+                Divider()
+
+                Button("Leave Channel", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
+                    Task { await client.leave() }
+                }
+                .disabled(client.channel == nil)
+            } label: {
+                Label("More", systemImage: "ellipsis.circle")
+            }
+        }
+    }
+}
+
+/// Shown while the websocket isn't connected.
+private struct ConnectionBanner: View {
+    let client: RvrbClient
+
+    var body: some View {
+        let status = client.socket.status
+
+        if status != .connected {
+            HStack {
+                if status == .connecting {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: "wifi.exclamationmark")
+                }
+                Text(status.label)
+                    .lineLimit(2)
+                Spacer()
+                if status != .connecting {
+                    Button("Reconnect") { client.socket.start() }
+                        .buttonStyle(.borderless)
+                }
+            }
+            .font(.callout)
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(.orange.opacity(0.15))
+        }
+    }
+}
+
+private struct SearchSheet: View {
+    let client: RvrbClient
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            SearchView(client: client)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
+                }
+        }
+        #if os(macOS)
+        .frame(minWidth: 480, minHeight: 560)
+        #endif
+    }
+}
