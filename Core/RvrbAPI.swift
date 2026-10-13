@@ -64,6 +64,33 @@ final class RvrbAPI {
         return ids
     }
 
+    // MARK: Users
+
+    /// `GET /api/users/{id}/public`: the user as others see them (bio, social links when shown, country…).
+    func publicProfile(userId: String) async throws -> JSON {
+        try await get("api/users/\(Self.escape(userId))/public")
+    }
+
+    /// `GET /api/users/{id}/statistics`: plays summed per period (`today`, `thismonth`, `lastmonth`, `alltime`).
+    func statistics(userId: String) async throws -> JSON {
+        try await get("api/users/\(Self.escape(userId))/statistics")
+    }
+
+    /// `GET /api/users/{id}/achievements`: earned achievements (`title`, `description`, `icon`).
+    func achievements(userId: String) async throws -> [JSON] {
+        try await get("api/users/\(Self.escape(userId))/achievements").array ?? []
+    }
+
+    /// The ids of the users `me` follows, from their own `GET /api/users/{id}/profile`.
+    func followedUserIds(me: String) async throws -> Set<String> {
+        Set((try await get("api/users/\(Self.escape(me))/profile")["followed"]?.array ?? []).compactMap(\.string))
+    }
+
+    /// `PUT` / `DELETE /api/users/{me}/following/{target}`.
+    func setFollowingUser(_ follow: Bool, me: String, target: String) async throws {
+        _ = try await send(follow ? "PUT" : "DELETE", "api/users/\(Self.escape(me))/following/\(Self.escape(target))")
+    }
+
     /// `PUT` / `DELETE /api/channel/{id}/followers/me`.
     func setFollowing(_ follow: Bool, channelId: String) async throws {
         _ = try await send(follow ? "PUT" : "DELETE", "api/channel/\(Self.escape(channelId))/followers/me")

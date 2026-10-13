@@ -26,9 +26,24 @@ struct RoomView: View {
         #endif
     }
 
-    enum Sheet: String, Identifiable {
+    enum Sheet: Identifiable, Hashable {
         case queue, search, devices, people
-        var id: String { rawValue }
+        case profile(userId: String)
+
+        var id: String {
+            switch self {
+            case .queue: "queue"
+            case .search: "search"
+            case .devices: "devices"
+            case .people: "people"
+            case .profile(let userId): "profile-\(userId)"
+            }
+        }
+    }
+
+    private func showProfile(_ userId: String) {
+        guard client.hasProfile(userId) else { return }
+        sheet = .profile(userId: userId)
     }
 
     private var title: String {
@@ -38,14 +53,14 @@ struct RoomView: View {
     var body: some View {
         VStack(spacing: 0) {
             ConnectionBanner(client: client)
-            NowPlayingView(client: client)
+            NowPlayingView(client: client, onSelectUser: showProfile)
             Divider()
 
             if client.channel == nil && client.joining != nil {
                 ProgressView("Joining \(title)…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ChatView(client: client)
+                ChatView(client: client, onSelectUser: showProfile)
             }
 
             ComposerView(client: client)
@@ -80,7 +95,7 @@ struct RoomView: View {
         #endif
         .toolbar { toolbar }
         .inspector(isPresented: peopleInSheet ? .constant(false) : $showsPeople) {
-            PeopleView(client: client)
+            PeopleView(client: client, onSelect: showProfile)
                 .inspectorColumnWidth(min: 200, ideal: 240, max: 340)
         }
         .sheet(item: $sheet) { sheet in
@@ -89,6 +104,7 @@ struct RoomView: View {
             case .search: SearchSheet(client: client)
             case .devices: DevicesView(client: client)
             case .people: PeopleSheet(client: client)
+            case .profile(let userId): ProfileSheet(client: client, userId: userId)
             }
         }
     }
@@ -237,10 +253,16 @@ extension View {
 private struct PeopleSheet: View {
     let client: RvrbClient
     @Environment(\.dismiss) private var dismiss
+    @State private var selected: String?
 
     var body: some View {
         NavigationStack {
-            PeopleView(client: client)
+            PeopleView(client: client) { userId in
+                if client.hasProfile(userId) { selected = userId }
+            }
+                .navigationDestination(item: $selected) { userId in
+                    UserProfileView(client: client, userId: userId)
+                }
                 .navigationTitle("People")
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
@@ -252,5 +274,31 @@ private struct PeopleSheet: View {
                 }
         }
         .presentationDetents([.medium, .large])
+    }
+}
+
+private struct ProfileSheet: View {
+    let client: RvrbClient
+    let userId: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            UserProfileView(client: client, userId: userId)
+                #if os(iOS)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
+                }
+                #else
+                .sheetBar { Button("Done") { dismiss() }.keyboardShortcut(.defaultAction) }
+                #endif
+        }
+        #if os(iOS)
+        .presentationDetents([.medium, .large])
+        #else
+        .frame(minWidth: 420, minHeight: 560)
+        #endif
     }
 }

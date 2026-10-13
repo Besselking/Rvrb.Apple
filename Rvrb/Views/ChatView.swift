@@ -3,6 +3,7 @@ import SwiftUI
 /// The channel's chat. Follows new messages while scrolled to the bottom, and stays put when the user scrolled up.
 struct ChatView: View {
     let client: RvrbClient
+    var onSelectUser: (String) -> Void = { _ in }
 
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var isAtBottom = true
@@ -19,7 +20,8 @@ struct ChatView: View {
                                showsHeader: showsHeader(messages, at: index),
                                avatarURL: client.avatarURL(for: userId, fallback: message.avatarURL),
                                activity: client.activity(of: userId),
-                               isBot: message.kind == .bot || client.isBot(userId))
+                               isBot: message.kind == .bot || client.isBot(userId),
+                               onSelectUser: client.hasProfile(userId) ? { onSelectUser(userId) } : nil)
                         .id(message.id)
                 }
             }
@@ -55,6 +57,8 @@ struct MessageRow: View {
     let avatarURL: URL?
     var activity: UserActivity = .listening
     var isBot = false
+    /// Tapping the avatar or name shows the sender's profile.
+    var onSelectUser: (() -> Void)? = nil
 
     var body: some View {
         switch message.kind {
@@ -86,6 +90,7 @@ struct MessageRow: View {
             HStack(alignment: .top, spacing: 10) {
                 if showsHeader {
                     Avatar(name: message.name, url: avatarURL, seed: message.userId ?? message.name, activity: activity)
+                        .onTapGesture { onSelectUser?() }
                 } else {
                     Color.clear.frame(width: Avatar.size, height: 1)
                 }
@@ -96,6 +101,7 @@ struct MessageRow: View {
                             Text(message.name)
                                 .font(.subheadline.bold())
                                 .foregroundStyle(Avatar.color(for: message.userId ?? message.name))
+                                .onTapGesture { onSelectUser?() }
                             if isBot {
                                 BotTag()
                             }

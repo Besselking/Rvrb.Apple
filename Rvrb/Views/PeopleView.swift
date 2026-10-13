@@ -3,6 +3,8 @@ import SwiftUI
 /// The DJs in play order (the first is playing) and everyone else listening.
 struct PeopleView: View {
     let client: RvrbClient
+    /// A person was tapped (to show their profile).
+    var onSelect: (String) -> Void = { _ in }
 
     var body: some View {
         List {
@@ -13,9 +15,12 @@ struct PeopleView: View {
                 }
 
                 ForEach(Array(client.djIds.enumerated()), id: \.element) { index, id in
-                    PersonRow(name: client.name(for: id), url: client.avatarURL(for: id), seed: id,
-                              activity: client.activity(of: id), isBot: client.isBot(id),
-                              detail: index == 0 ? "Playing" : "#\(index + 1)", isMe: id == client.me.id)
+                    Button { onSelect(id) } label: {
+                        PersonRow(name: client.name(for: id), url: client.avatarURL(for: id), seed: id,
+                                  activity: client.activity(of: id), isBot: client.isBot(id),
+                                  detail: index == 0 ? "Playing" : "#\(index + 1)", isMe: id == client.me.id)
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 if client.channel != nil {
@@ -30,8 +35,12 @@ struct PeopleView: View {
 
             Section("Listeners (\(client.listeners.count))") {
                 ForEach(client.listeners) { user in
-                    PersonRow(name: user.name, url: client.avatarURL(for: user.id), seed: user.id,
-                              activity: client.activity(of: user.id), isBot: user.isBot, detail: nil, isMe: user.id == client.me.id)
+                    Button { onSelect(user.id) } label: {
+                        PersonRow(name: user.name, url: client.avatarURL(for: user.id), seed: user.id,
+                                  activity: client.activity(of: user.id), isBot: user.isBot, detail: nil,
+                                  isMe: user.id == client.me.id)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -71,5 +80,6 @@ private struct PersonRow: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .contentShape(Rectangle())
     }
 }

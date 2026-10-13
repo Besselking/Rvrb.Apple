@@ -3,6 +3,7 @@ import SwiftUI
 /// The channel's track: artwork, title, the DJ, progress, and the votes.
 struct NowPlayingView: View {
     let client: RvrbClient
+    var onSelectUser: (String) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -23,6 +24,7 @@ struct NowPlayingView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
+                                .onTapGesture { onSelectUser(dj) }
                         }
 
                         Spacer(minLength: 0)

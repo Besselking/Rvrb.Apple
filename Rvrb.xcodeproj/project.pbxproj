@@ -60,14 +60,14 @@
 			path = RvrbWidgets;
 			sourceTree = "<group>";
 		};
-		AA0000000000000000000020 /* Core */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Core;
-			sourceTree = "<group>";
-		};
 		AA0000000000000000000012 /* Shared */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Shared;
+			sourceTree = "<group>";
+		};
+		AA0000000000000000000020 /* Core */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Core;
 			sourceTree = "<group>";
 		};
 		AA0000000000000000000022 /* RvrbShare */ = {
@@ -144,8 +144,8 @@
 			);
 			fileSystemSynchronizedGroups = (
 				AA0000000000000000000002 /* Rvrb */,
-				AA0000000000000000000020 /* Core */,
 				AA0000000000000000000012 /* Shared */,
+				AA0000000000000000000020 /* Core */,
 			);
 			name = Rvrb;
 			packageProductDependencies = (
@@ -190,8 +190,8 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				AA0000000000000000000022 /* RvrbShare */,
 				AA0000000000000000000020 /* Core */,
+				AA0000000000000000000022 /* RvrbShare */,
 			);
 			name = RvrbShare;
 			packageProductDependencies = (
@@ -362,6 +362,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphone*]" = "Config/Rvrb-iOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = GT449U54QF;
@@ -370,7 +371,6 @@
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				"CODE_SIGN_ENTITLEMENTS[sdk=iphone*]" = "Config/Rvrb-iOS.entitlements";
 				"INFOPLIST_FILE[sdk=iphone*]" = "Config/Rvrb-iOS-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Rvrb;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
@@ -403,6 +403,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphone*]" = "Config/Rvrb-iOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = GT449U54QF;
@@ -411,7 +412,6 @@
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				"CODE_SIGN_ENTITLEMENTS[sdk=iphone*]" = "Config/Rvrb-iOS.entitlements";
 				"INFOPLIST_FILE[sdk=iphone*]" = "Config/Rvrb-iOS-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Rvrb;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
@@ -507,6 +507,7 @@
 				CODE_SIGN_ENTITLEMENTS = Config/RvrbShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = GT449U54QF;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/RvrbShare-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Rvrb;
@@ -538,6 +539,7 @@
 				CODE_SIGN_ENTITLEMENTS = Config/RvrbShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = GT449U54QF;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/RvrbShare-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Rvrb;

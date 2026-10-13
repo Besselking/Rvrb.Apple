@@ -103,6 +103,28 @@ final class RvrbClient {
         }
     }
 
+    /// Ids of the users the user follows; nil until a profile asks.
+    private(set) var followedUserIds: Set<String>?
+
+    func loadFollowedUsers() async {
+        guard followedUserIds == nil else { return }
+        do {
+            followedUserIds = try await api.followedUserIds(me: me.id)
+        } catch {
+            Log.app.error("Could not load followed users: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    func setFollowingUser(_ follow: Bool, _ userId: String) async throws {
+        try await api.setFollowingUser(follow, me: me.id, target: userId)
+        if follow { followedUserIds?.insert(userId) } else { followedUserIds?.remove(userId) }
+    }
+
+    /// Whether a user has a profile to show: not RVRB itself or the channel's own bot.
+    func hasProfile(_ userId: String) -> Bool {
+        !userId.isEmpty && userId != "server" && !channelBotIds.contains(userId)
+    }
+
     /// The full followed list, loaded by the channel list.
     func replaceFollowed(_ ids: Set<String>) {
         followedChannelIds = ids
