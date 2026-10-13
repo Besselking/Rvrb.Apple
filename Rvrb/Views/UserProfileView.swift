@@ -155,11 +155,12 @@ struct UserProfileView: View {
                     }
                 }
             } label: {
-                Label(following ? "Following" : "Follow", systemImage: following ? "checkmark" : "plus")
+                Label(following ? "Following" : "Follow", systemImage: following ? "heart.fill" : "heart")
+                    .foregroundStyle(.white)
                     .frame(minWidth: 120)
             }
             .buttonStyle(.borderedProminent)
-            .tint(following ? .secondary : .accentColor)
+            .tint(following ? .pink : .accentColor)
             .disabled(isChangingFollow)
         }
     }
