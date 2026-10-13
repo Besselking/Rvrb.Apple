@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 #if os(macOS)
 import AppKit
 #else
@@ -31,14 +32,20 @@ final class RvrbClient {
     private(set) var nowPlaying: NowPlaying?
     /// Each voter's votes on the playing track, by user id.
     private(set) var voters: [String: MyVote] = [:]
-    @ObservationIgnored private var usersById: [String: ChannelUser] = [:]
+    // Observed (not ignored): chat rows look people up here, and must redraw when they arrive after the messages.
+    private var usersById: [String: ChannelUser] = [:]
+    /// The channel's own bot, which chats (and can DJ) as the user id "bot" or as its record's ids.
+    private(set) var channelBot: ChannelUser?
+    private var channelBotIds = RvrbClient.defaultBotIds
+    /// The channel's bot chats as "bot" or as the number 0 (seen on the live server).
+    private static let defaultBotIds: Set<String> = ["bot", "0"]
     /// Joined on the current connection: `join` was answered since the socket last connected.
     private(set) var isInRoom = false
     /// A failed join, to show as an alert (the chat isn't on screen then).
     var joinError: String?
 
     @ObservationIgnored private var seen: Set<String> = []
-    @ObservationIgnored private var names: [String: String] = [:]
+    private var names: [String: String] = [:]
     @ObservationIgnored private var pendingJoin: Channel?
     /// The track this client last gave the server for its turn; taken off the queue once it starts playing.
     @ObservationIgnored private var answeredTrackId: String?
@@ -98,7 +105,7 @@ final class RvrbClient {
 
     func name(for userId: String) -> String {
         if userId == me.id { return me.name }
-        return names[userId] ?? (userId == "bot" ? "Bot" : "Unknown DJ")
+        return names[userId] ?? (channelBotIds.contains(userId) ? channelBot?.name ?? "Bot" : "Unknown DJ")
     }
 
     var listeners: [ChannelUser] {
@@ -107,7 +114,11 @@ final class RvrbClient {
     }
 
     func user(_ id: String) -> ChannelUser? {
-        usersById[id]
+        usersById[id] ?? (channelBotIds.contains(id) ? channelBot : nil)
+    }
+
+    func isBot(_ id: String) -> Bool {
+        user(id)?.isBot ?? channelBotIds.contains(id)
     }
 
     /// Only the DJ playing now shows as DJing; anyone else (DJs waiting their turn too) by their vote on the track.
@@ -122,7 +133,7 @@ final class RvrbClient {
 
     /// The user's picture for what they're doing (their DJ, dope or nope image), falling back to their avatar.
     func avatarURL(for userId: String, fallback: URL? = nil) -> URL? {
-        let user = usersById[userId]
+        let user = user(userId)
         let base = user?.imageURL ?? fallback
         return switch activity(of: userId) {
         case .djing: user?.djImageURL ?? base
@@ -154,6 +165,8 @@ final class RvrbClient {
         names = [:]
         usersById = [:]
         voters = [:]
+        channelBot = nil
+        channelBotIds = RvrbClient.defaultBotIds
         djIds = channel.djIds
         nowPlaying = nil
         messages = []
@@ -176,6 +189,7 @@ final class RvrbClient {
         joining = nil
         self.channel = channel
         isInRoom = true
+        Task { await loadChannelBot(channelId: channel.id) }
 
         if let greeting = channel.greeting {
             addNotice(ChatText.parse(.string(greeting)).plain)
@@ -201,6 +215,8 @@ final class RvrbClient {
         names = [:]
         usersById = [:]
         voters = [:]
+        channelBot = nil
+        channelBotIds = RvrbClient.defaultBotIds
         djIds = []
         nowPlaying = nil
         answeredTrackId = nil
@@ -235,6 +251,27 @@ final class RvrbClient {
                     addNotice("Could not rejoin \(channel.title): \(Self.describeJoinError(error))")
                 }
             }
+        }
+    }
+
+    /// Its messages name it "bot" or 0; its record's ids are added in case they're used too.
+    private func setChannelBot(_ bot: JSON) {
+        guard bot.object?.isEmpty == false else {
+            channelBot = nil
+            channelBotIds = RvrbClient.defaultBotIds
+            return
+        }
+        channelBotIds = Self.defaultBotIds.union([bot["id"]?.string, bot["_id"]?.string].compactMap { $0 })
+        channelBot = ChannelUser(bot, id: "bot")
+    }
+
+    private func loadChannelBot(channelId: String) async {
+        do {
+            let bot = try await api.channelBot(channelId: channelId)
+            guard channel?.id == channelId else { return }
+            setChannelBot(bot)
+        } catch {
+            Log.app.error("Could not load the channel's bot: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -356,7 +393,9 @@ final class RvrbClient {
         let name = switch userId {
         case "server": "RVRB"
         case me.id: me.name
-        default: names[userId] ?? m["userName"]?.nonEmptyString ?? m["displayName"]?.nonEmptyString ?? (userId == "bot" ? "Bot" : "Unknown")
+        case _ where channelBotIds.contains(userId):
+            channelBot?.name ?? m["displayName"]?.nonEmptyString ?? m["userName"]?.nonEmptyString ?? "Bot"
+        default: names[userId] ?? m["userName"]?.nonEmptyString ?? m["displayName"]?.nonEmptyString ?? "Unknown"
         }
 
         let type = m["type"]?.string ?? "chat"
@@ -382,7 +421,7 @@ final class RvrbClient {
         case "alert": .alert
         case "play": .play
         case "botResponse": .bot
-        default: userId == "server" ? .alert : (userId == "bot" ? .bot : .chat)
+        default: userId == "server" ? .alert : (channelBotIds.contains(userId) ? .bot : .chat)
         }
 
         let isMine = userId == me.id
@@ -417,6 +456,12 @@ final class RvrbClient {
         switch method {
         case "pushChannelMessage":
             add(p, live: true)
+
+        case "updateChannel":
+            // After an edit it carries the channel's bot.
+            if let bot = p?["bot"], bot.object?.isEmpty == false {
+                setChannelBot(bot)
+            }
 
         case "updateChannelUsers":
             if let list = p?["users"]?.array { updateUsers(list) }
@@ -484,7 +529,7 @@ final class RvrbClient {
     }
 
     private func updateUsers(_ list: [JSON]) {
-        users = list.compactMap(ChannelUser.init)
+        users = list.compactMap { ChannelUser($0) }
             .sorted { ($0.role, $1.name.lowercased()) > ($1.role, $0.name.lowercased()) }
         names = Dictionary(users.map { ($0.id, $0.name) }) { first, _ in first }
         usersById = Dictionary(users.map { ($0.id, $0) }) { first, _ in first }

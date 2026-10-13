@@ -41,6 +41,12 @@ final class RvrbAPI {
         return ((result["channels"]?.array ?? []).compactMap(Channel.init), result["more"]?.bool ?? false)
     }
 
+    /// `GET /api/channel/{id}/bot`: the channel's own bot (name and pictures); empty when it has none. Only for
+    /// users joined to the channel.
+    func channelBot(channelId: String) async throws -> JSON {
+        try await get("api/channel/\(Self.escape(channelId))/bot")
+    }
+
     /// `GET /api/channel/{id}/chat`: the last 100 messages; only works once joined over the websocket.
     func chat(channelId: String) async throws -> [JSON] {
         try await get("api/channel/\(Self.escape(channelId))/chat")["chat"]?.array ?? []

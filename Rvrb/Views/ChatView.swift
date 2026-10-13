@@ -18,7 +18,8 @@ struct ChatView: View {
                     MessageRow(message: message,
                                showsHeader: showsHeader(messages, at: index),
                                avatarURL: client.avatarURL(for: userId, fallback: message.avatarURL),
-                               activity: client.activity(of: userId))
+                               activity: client.activity(of: userId),
+                               isBot: message.kind == .bot || client.isBot(userId))
                         .id(message.id)
                 }
             }
@@ -53,6 +54,7 @@ struct MessageRow: View {
     let showsHeader: Bool
     let avatarURL: URL?
     var activity: UserActivity = .listening
+    var isBot = false
 
     var body: some View {
         switch message.kind {
@@ -94,6 +96,9 @@ struct MessageRow: View {
                             Text(message.name)
                                 .font(.subheadline.bold())
                                 .foregroundStyle(Avatar.color(for: message.userId ?? message.name))
+                            if isBot {
+                                BotTag()
+                            }
                             if message.kind == .whisper {
                                 Text("whisper")
                                     .font(.caption2)

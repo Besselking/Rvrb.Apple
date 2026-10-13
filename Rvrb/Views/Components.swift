@@ -117,3 +117,16 @@ struct Avatar: View {
         return palette[Int(hash % UInt32(palette.count))]
     }
 }
+
+/// Marks a bot's name, like chat apps do.
+struct BotTag: View {
+    var body: some View {
+        Text("BOT")
+            .font(.system(size: 9, weight: .heavy))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1.5)
+            .background(.tint, in: RoundedRectangle(cornerRadius: 3))
+            .accessibilityLabel("Bot")
+    }
+}

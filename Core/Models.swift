@@ -89,10 +89,14 @@ struct ChannelUser: Identifiable, Hashable {
     let nopeImageURL: URL?
     let role: Int
     let mobile: Bool
+    /// An external bot user (`type: "bot"`), or the channel's own bot.
+    let isBot: Bool
 
-    init?(_ json: JSON) {
-        guard let id = json["_id"]?.string else { return nil }
+    /// `id` overrides the document's: the channel's bot record has its own `_id`, but it chats and DJs as "bot".
+    init?(_ json: JSON, id: String? = nil) {
+        guard let id = id ?? json["_id"]?.string else { return nil }
         self.id = id
+        isBot = id == "bot" || json["type"]?.string == "bot"
         userName = json["userName"]?.nonEmptyString
         name = json["displayName"]?.nonEmptyString ?? userName ?? "Unknown"
         imageURL = RvrbAPI.imageURL(json["image"])

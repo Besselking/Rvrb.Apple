@@ -14,7 +14,7 @@ struct PeopleView: View {
 
                 ForEach(Array(client.djIds.enumerated()), id: \.element) { index, id in
                     PersonRow(name: client.name(for: id), url: client.avatarURL(for: id), seed: id,
-                              activity: client.activity(of: id),
+                              activity: client.activity(of: id), isBot: client.isBot(id),
                               detail: index == 0 ? "Playing" : "#\(index + 1)", isMe: id == client.me.id)
                 }
 
@@ -31,7 +31,7 @@ struct PeopleView: View {
             Section("Listeners (\(client.listeners.count))") {
                 ForEach(client.listeners) { user in
                     PersonRow(name: user.name, url: client.avatarURL(for: user.id), seed: user.id,
-                              activity: client.activity(of: user.id), detail: nil, isMe: user.id == client.me.id)
+                              activity: client.activity(of: user.id), isBot: user.isBot, detail: nil, isMe: user.id == client.me.id)
                 }
             }
         }
@@ -46,6 +46,7 @@ private struct PersonRow: View {
     let url: URL?
     let seed: String
     let activity: UserActivity
+    let isBot: Bool
     let detail: String?
     let isMe: Bool
 
@@ -55,6 +56,9 @@ private struct PersonRow: View {
             Text(name)
                 .fontWeight(isMe ? .semibold : .regular)
                 .lineLimit(1)
+            if isBot {
+                BotTag()
+            }
             if isMe {
                 Text("You")
                     .font(.caption2)
