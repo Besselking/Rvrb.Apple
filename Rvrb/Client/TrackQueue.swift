@@ -33,6 +33,14 @@ final class TrackQueue {
         try await change { try await self.api.addTracks(stackId: $0, trackIds: trackIds, position: self.total) }
     }
 
+    /// Adds dropped or shared Spotify tracks and playlists at `position`, or at the bottom when nil.
+    @discardableResult
+    func insert(_ items: [SpotifyItem], at position: Int?) async throws -> (tracks: [Track], playlists: Int) {
+        var result: (tracks: [Track], playlists: Int) = ([], 0)
+        try await change { result = try await self.api.add(items, toStack: $0, at: position) }
+        return result
+    }
+
     func remove(at position: Int) async throws {
         try await change { try await self.api.removeTrack(stackId: $0, at: position) }
     }
@@ -88,11 +96,7 @@ final class TrackQueue {
     private func resolveStackId() async throws -> String {
         if let stackId { return stackId }
 
-        let stacks = try await api.stacks()
-        let queue = stacks.first { $0["activeQueue"]?.bool == true && $0["deleted"]?.bool != true }
-        let stack = if let queue { queue } else { try await api.createStack(name: "RVRB DJ Queue", activeQueue: true) }
-
-        guard let id = stack["_id"]?.string else { throw RvrbError.server("The queue has no id") }
+        let id = try await api.djQueueId()
         stackId = id
         return id
     }

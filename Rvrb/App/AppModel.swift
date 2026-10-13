@@ -80,6 +80,7 @@ final class AppModel {
         do {
             let login = try await api.login()
             if let token = login["token"]?.nonEmptyString { session.update(token) }
+            session.persist()
 
             let me = Me(login["user"])
             let client = RvrbClient(api: api, session: session, me: me, chatMaxLength: login["chatMaxLength"]?.int ?? 500)

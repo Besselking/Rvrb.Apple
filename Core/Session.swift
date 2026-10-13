@@ -25,6 +25,12 @@ final class Session {
         Keychain.write(token)
     }
 
+    /// Saves the token again, into the keychain group shared with the share extension (moving a token saved
+    /// before that group existed).
+    func persist() {
+        if let token { Keychain.write(token) }
+    }
+
     func forget() {
         token = nil
         Keychain.delete()
@@ -49,8 +55,13 @@ final class Session {
 }
 
 /// The token as a generic password. On macOS this is the login keychain, which works in the sandbox without a
-/// keychain access group (and so without a development team).
+/// keychain access group (and so without a development team). On iOS it goes in the App Group, which doubles as a
+/// keychain access group, so the share extension can read it; without that entitlement, in the app's own group.
 private enum Keychain {
+    #if os(iOS)
+    static let sharedGroup = "group.com.marijn.Rvrb"
+    #endif
+
     private static let query: [String: Any] = [
         kSecClass as String: kSecClassGenericPassword,
         kSecAttrService as String: "Rvrb",
@@ -70,18 +81,21 @@ private enum Keychain {
     }
 
     static func write(_ token: String) {
-        let data = Data(token.utf8)
-        let status = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        // Replace rather than update: an older item may sit in another access group.
+        SecItemDelete(query as CFDictionary)
 
-        if status == errSecItemNotFound {
-            var item = query
-            item[kSecValueData as String] = data
-            item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-            let added = SecItemAdd(item as CFDictionary, nil)
-            if added != errSecSuccess { Log.app.error("Could not save the token: \(added)") }
-        } else if status != errSecSuccess {
-            Log.app.error("Could not update the token: \(status)")
-        }
+        var item = query
+        item[kSecValueData as String] = Data(token.utf8)
+        item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+
+        #if os(iOS)
+        var shared = item
+        shared[kSecAttrAccessGroup as String] = sharedGroup
+        if SecItemAdd(shared as CFDictionary, nil) == errSecSuccess { return }
+        #endif
+
+        let added = SecItemAdd(item as CFDictionary, nil)
+        if added != errSecSuccess { Log.app.error("Could not save the token: \(added)") }
     }
 
     static func delete() {

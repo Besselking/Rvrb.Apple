@@ -12,6 +12,7 @@ struct RoomView: View {
     @State private var showsPeople = false
     #endif
     @State private var sheet: Sheet?
+    @State private var isDropTargeted = false
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
@@ -48,6 +49,30 @@ struct RoomView: View {
             }
 
             ComposerView(client: client)
+        }
+        .overlay {
+            if isDropTargeted {
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(.tint, style: StrokeStyle(lineWidth: 3, dash: [8, 6]))
+                    .background(.tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                    .overlay {
+                        Label("Add to your queue", systemImage: "text.badge.plus")
+                            .font(.title3.bold())
+                            .padding()
+                            .background(.regularMaterial, in: Capsule())
+                    }
+                    .padding(8)
+                    .allowsHitTesting(false)
+            }
+        }
+        // Spotify tracks or playlists dropped on the room go to the bottom of the queue.
+        .dropDestination(for: SpotifyDrop.self) { drops, _ in
+            let items = SpotifyDrop.items(in: drops)
+            guard !items.isEmpty else { return false }
+            Task { await client.addToQueue(items) }
+            return true
+        } isTargeted: { targeted in
+            isDropTargeted = targeted
         }
         .navigationTitle(title)
         #if os(iOS)
@@ -162,22 +187,43 @@ private struct ConnectionBanner: View {
     }
 }
 
-private struct SearchSheet: View {
+struct SearchSheet: View {
     let client: RvrbClient
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             SearchView(client: client)
+                #if os(iOS)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Done") { dismiss() }
                     }
                 }
+                #else
+                .sheetBar { Button("Done") { dismiss() }.keyboardShortcut(.defaultAction) }
+                #endif
         }
         #if os(macOS)
         .frame(minWidth: 480, minHeight: 560)
         #endif
+    }
+}
+
+extension View {
+    /// A bottom bar of buttons for Mac sheets, which have no toolbar.
+    func sheetBar<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                Divider()
+                HStack {
+                    Spacer()
+                    content()
+                }
+                .padding(12)
+            }
+            .background(.bar)
+        }
     }
 }
 

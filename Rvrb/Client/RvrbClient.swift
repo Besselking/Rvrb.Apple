@@ -649,6 +649,45 @@ final class RvrbClient {
         return ["track": track.json]
     }
 
+    /// Adds dropped or shared Spotify tracks and playlists to the queue (`position` nil: the bottom), and says
+    /// what happened in the chat. Returns that message.
+    @discardableResult
+    func addToQueue(_ items: [SpotifyItem], at position: Int? = nil) async -> String {
+        let supported = items.filter { if case .unsupported = $0 { false } else { true } }
+        let unsupported = Set(items.compactMap { if case .unsupported(let kind) = $0 { kind + "s" } else { nil } })
+            .sorted()
+
+        guard !supported.isEmpty else {
+            let message = unsupported.isEmpty
+                ? "No Spotify tracks or playlists in what was dropped."
+                : "\(unsupported.joined(separator: " and ").capitalized) can't go in the queue: add tracks or playlists."
+            addNotice(message)
+            return message
+        }
+
+        let message: String
+        do {
+            let (tracks, playlists) = try await queue.insert(supported, at: position)
+            var parts: [String] = []
+            if tracks.count == 1 {
+                parts.append("“\(tracks[0].name)”")
+            } else if !tracks.isEmpty {
+                parts.append("\(tracks.count) tracks")
+            }
+            if playlists > 0 { parts.append(playlists == 1 ? "a playlist" : "\(playlists) playlists") }
+
+            let place = position == 0 ? "the top of your queue" : "your queue"
+            message = parts.isEmpty ? "Nothing was added (unknown tracks?)."
+                : "Added \(parts.joined(separator: " and ")) to \(place)."
+                + (unsupported.isEmpty ? "" : " \(unsupported.joined(separator: " and ").capitalized) were skipped.")
+        } catch {
+            message = "Could not add to your queue: \(error.localizedDescription)"
+        }
+
+        addNotice(message)
+        return message
+    }
+
     func loadQueue() async {
         do {
             try await queue.reload()

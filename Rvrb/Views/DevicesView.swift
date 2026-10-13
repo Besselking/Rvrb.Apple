@@ -53,6 +53,7 @@ struct DevicesView: View {
             .navigationTitle("Spotify Device")
             .task { await load() }
             .refreshable { await load() }
+            #if os(iOS)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
@@ -61,6 +62,12 @@ struct DevicesView: View {
                     Button("Refresh", systemImage: "arrow.clockwise") { Task { await load() } }
                 }
             }
+            #else
+            .sheetBar {
+                Button("Refresh", systemImage: "arrow.clockwise") { Task { await load() } }
+                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+            }
+            #endif
         }
         #if os(macOS)
         .frame(minWidth: 420, minHeight: 440)

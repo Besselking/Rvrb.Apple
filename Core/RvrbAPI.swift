@@ -104,10 +104,18 @@ final class RvrbAPI {
         return stack
     }
 
-    /// Inserts at `position` (zero-based; the server's default is 0, the top).
-    func addTracks(stackId: String, trackIds: [String], position: Int) async throws {
+    /// Inserts at `position` (zero-based; the server's default is 0, the top); returns the added tracks.
+    @discardableResult
+    func addTracks(stackId: String, trackIds: [String], position: Int) async throws -> [Track] {
+        let result = try await send("POST", "api/music/stack/\(Self.escape(stackId))/tracks",
+                                    body: ["trackIds": .array(trackIds.map(JSON.string)), "position": .number(Double(position))])
+        return (result["result"]?["tracks"]?.array ?? []).compactMap(Track.init)
+    }
+
+    /// Inserts every track of a Spotify playlist (`spotify:playlist:…`) at `position`.
+    func addPlaylist(stackId: String, playlistURI: String, position: Int) async throws {
         _ = try await send("POST", "api/music/stack/\(Self.escape(stackId))/tracks",
-                           body: ["trackIds": .array(trackIds.map(JSON.string)), "position": .number(Double(position))])
+                           body: ["fromPlaylistUri": .string(playlistURI), "position": .number(Double(position))])
     }
 
     /// Moves one track; `targetPosition` counts after its removal.

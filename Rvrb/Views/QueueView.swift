@@ -1,11 +1,13 @@
 import SwiftUI
 
-/// The user's DJ queue: reorder, remove, play next, and add tracks.
+/// The user's DJ queue: reorder, remove, play next, and add tracks (by search, or by dropping Spotify links between
+/// rows). On the Mac the actions sit in a bar at the bottom: a sheet there has no toolbar to put them in.
 struct QueueView: View {
     let client: RvrbClient
 
     @Environment(\.dismiss) private var dismiss
     @State private var error: String?
+    @State private var notice: String?
     @State private var showsSearch = false
 
     private var queue: TrackQueue { client.queue }
@@ -16,6 +18,11 @@ struct QueueView: View {
                 if let error {
                     Label(error, systemImage: "exclamationmark.triangle")
                         .foregroundStyle(.red)
+                }
+
+                if let notice {
+                    Label(notice, systemImage: "checkmark.circle")
+                        .foregroundStyle(.secondary)
                 }
 
                 Section {
@@ -48,6 +55,9 @@ struct QueueView: View {
                         let target = destination > from ? destination - 1 : destination
                         perform { try await queue.move(from: from, to: target) }
                     }
+                    .dropDestination(for: SpotifyDrop.self) { drops, index in
+                        add(SpotifyDrop.items(in: drops), at: index)
+                    }
                 } footer: {
                     if queue.total > queue.tracks.count {
                         Text("Showing the first \(queue.tracks.count) of \(queue.total) tracks.")
@@ -69,9 +79,15 @@ struct QueueView: View {
                     ProgressView()
                 }
             }
+            // Dropped anywhere else (say on an empty queue): the bottom.
+            .dropDestination(for: SpotifyDrop.self) { drops, _ in
+                add(SpotifyDrop.items(in: drops), at: nil)
+                return true
+            }
             .navigationTitle("Your Queue")
             .refreshable { perform { try await queue.reload() } }
             .task { if !queue.isLoaded { perform { try await queue.reload() } } }
+            #if os(iOS)
             .navigationDestination(isPresented: $showsSearch) {
                 SearchView(client: client)
             }
@@ -82,16 +98,43 @@ struct QueueView: View {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Add Tracks", systemImage: "plus") { showsSearch = true }
                 }
-                #if os(iOS)
                 ToolbarItem(placement: .topBarLeading) {
                     EditButton()
                 }
-                #endif
             }
+            #else
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: 0) {
+                    Divider()
+                    HStack {
+                        Button("Add Tracks…", systemImage: "plus") { showsSearch = true }
+                        Text("or drag them in from Spotify")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Done") { dismiss() }
+                            .keyboardShortcut(.defaultAction)
+                    }
+                    .padding(12)
+                }
+                .background(.bar)
+            }
+            .sheet(isPresented: $showsSearch) {
+                SearchSheet(client: client)
+            }
+            #endif
         }
         #if os(macOS)
         .frame(minWidth: 480, minHeight: 560)
         #endif
+    }
+
+    private func add(_ items: [SpotifyItem], at position: Int?) {
+        Task {
+            let message = await client.addToQueue(items, at: position)
+            notice = message
+            error = nil
+        }
     }
 
     private func perform(_ operation: @escaping () async throws -> Void) {
@@ -158,7 +201,16 @@ struct SearchView: View {
             }
         }
         .navigationTitle("Add Tracks")
+        #if os(macOS)
+        // A Mac sheet has no toolbar for .searchable.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            TextField("Search Spotify: songs, artists, albums", text: $query)
+                .textFieldStyle(.roundedBorder)
+                .padding(12)
+        }
+        #else
         .searchable(text: $query, prompt: "Songs, artists, albums")
+        #endif
         .task(id: query) {
             let search = query.trimmingCharacters(in: .whitespaces)
             guard !search.isEmpty else {

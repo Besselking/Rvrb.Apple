@@ -50,6 +50,11 @@
 			path = RvrbWidgets;
 			sourceTree = "<group>";
 		};
+		AA0000000000000000000020 /* Core */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Core;
+			sourceTree = "<group>";
+		};
 		AA0000000000000000000012 /* Shared */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Shared;
@@ -79,6 +84,7 @@
 			isa = PBXGroup;
 			children = (
 				AA0000000000000000000002 /* Rvrb */,
+				AA0000000000000000000020 /* Core */,
 				AA0000000000000000000012 /* Shared */,
 				AA0000000000000000000011 /* RvrbWidgets */,
 				AA0000000000000000000005 /* Products */,
@@ -113,6 +119,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				AA0000000000000000000002 /* Rvrb */,
+				AA0000000000000000000020 /* Core */,
 				AA0000000000000000000012 /* Shared */,
 			);
 			name = Rvrb;
