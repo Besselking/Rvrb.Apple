@@ -15,7 +15,7 @@ enum RvrbError: LocalizedError {
 
 /// The REST routes the client needs (https://app.rvrb.one/api-docs/openapi.yaml).
 final class RvrbAPI {
-    static let baseURL = URL(string: "https://app.rvrb.one/")!
+    nonisolated static let baseURL = URL(string: "https://app.rvrb.one/")!
 
     private let session: Session
     private let urlSession: URLSession
@@ -160,6 +160,14 @@ final class RvrbAPI {
         }
 
         return data.isEmpty ? .null : ((try? JSON(parsing: data)) ?? .string(text))
+    }
+
+    /// User images are full URLs (e.g. from Spotify) or, for uploads, paths like `/static/abc.png` on RVRB.
+    nonisolated static func imageURL(_ value: JSON?) -> URL? {
+        guard let text = value?.nonEmptyString, !text.hasPrefix("data:") else { return nil }
+        if text.hasPrefix("http://") || text.hasPrefix("https://") { return URL(string: text) }
+        if text.hasPrefix("//") { return URL(string: "https:" + text) }
+        return URL(string: text.hasPrefix("/") ? String(text.dropFirst()) : text, relativeTo: baseURL)?.absoluteURL
     }
 
     private static func escape(_ value: String) -> String {

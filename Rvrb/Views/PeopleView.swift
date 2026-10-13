@@ -13,7 +13,8 @@ struct PeopleView: View {
                 }
 
                 ForEach(Array(client.djIds.enumerated()), id: \.element) { index, id in
-                    PersonRow(name: client.name(for: id), url: client.user(id)?.imageURL, seed: id,
+                    PersonRow(name: client.name(for: id), url: client.avatarURL(for: id), seed: id,
+                              activity: client.activity(of: id),
                               detail: index == 0 ? "Playing" : "#\(index + 1)", isMe: id == client.me.id)
                 }
 
@@ -29,7 +30,8 @@ struct PeopleView: View {
 
             Section("Listeners (\(client.listeners.count))") {
                 ForEach(client.listeners) { user in
-                    PersonRow(name: user.name, url: user.imageURL, seed: user.id, detail: nil, isMe: user.id == client.me.id)
+                    PersonRow(name: user.name, url: client.avatarURL(for: user.id), seed: user.id,
+                              activity: client.activity(of: user.id), detail: nil, isMe: user.id == client.me.id)
                 }
             }
         }
@@ -43,12 +45,13 @@ private struct PersonRow: View {
     let name: String
     let url: URL?
     let seed: String
+    let activity: UserActivity
     let detail: String?
     let isMe: Bool
 
     var body: some View {
         HStack(spacing: 10) {
-            Avatar(name: name, url: url, seed: seed)
+            Avatar(name: name, url: url, seed: seed, activity: activity, size: 34)
             Text(name)
                 .fontWeight(isMe ? .semibold : .regular)
                 .lineLimit(1)

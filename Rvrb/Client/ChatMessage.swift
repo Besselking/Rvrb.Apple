@@ -21,6 +21,17 @@ struct ChatMessage: Identifiable {
     let body: ChatText.Body
     let isMine: Bool
     let mentionsMe: Bool
+    /// The sender's picture as the message carries it, for senders no longer in the channel.
+    var avatarURL: URL? = nil
+}
+
+/// What a user is doing, shown on their avatar.
+enum UserActivity {
+    case listening
+    /// On the decks (the first DJ is playing).
+    case djing
+    case doped
+    case noped
 }
 
 /// The votes on the playing track, and the user's own.

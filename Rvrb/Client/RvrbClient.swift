@@ -27,6 +27,9 @@ final class RvrbClient {
     /// DJ ids in play order: the first is playing.
     private(set) var djIds: [String] = []
     private(set) var nowPlaying: NowPlaying?
+    /// Each voter's votes on the playing track, by user id.
+    private(set) var voters: [String: MyVote] = [:]
+    @ObservationIgnored private var usersById: [String: ChannelUser] = [:]
     /// Joined on the current connection: `join` was answered since the socket last connected.
     private(set) var isInRoom = false
     /// A failed join, to show as an alert (the chat isn't on screen then).
@@ -101,7 +104,29 @@ final class RvrbClient {
     }
 
     func user(_ id: String) -> ChannelUser? {
-        users.first { $0.id == id }
+        usersById[id]
+    }
+
+    /// The playing DJ shows as DJing; anyone else by their vote on the track, then by being on the decks.
+    func activity(of userId: String) -> UserActivity {
+        if djIds.first == userId { return .djing }
+        if let vote = voters[userId] {
+            if vote.dope { return .doped }
+            if vote.nope { return .noped }
+        }
+        return djIds.contains(userId) ? .djing : .listening
+    }
+
+    /// The user's picture for what they're doing (their DJ, dope or nope image), falling back to their avatar.
+    func avatarURL(for userId: String, fallback: URL? = nil) -> URL? {
+        let user = usersById[userId]
+        let base = user?.imageURL ?? fallback
+        return switch activity(of: userId) {
+        case .djing: user?.djImageURL ?? base
+        case .doped: user?.dopeImageURL ?? base
+        case .noped: user?.nopeImageURL ?? base
+        case .listening: base
+        }
     }
 
     // MARK: Joining
@@ -124,6 +149,8 @@ final class RvrbClient {
         isInRoom = false
         users = []
         names = [:]
+        usersById = [:]
+        voters = [:]
         djIds = channel.djIds
         nowPlaying = nil
         messages = []
@@ -169,6 +196,8 @@ final class RvrbClient {
         isInRoom = false
         users = []
         names = [:]
+        usersById = [:]
+        voters = [:]
         djIds = []
         nowPlaying = nil
         answeredTrackId = nil
@@ -313,7 +342,8 @@ final class RvrbClient {
         let mentionsMe = !isMine && (kind == .whisper || mentions.contains { body.plain.localizedCaseInsensitiveContains($0) })
 
         let message = ChatMessage(id: key, time: Date(timeIntervalSince1970: syncTime / 1000), userId: userId, name: name,
-                                  kind: kind, body: body, isMine: isMine, mentionsMe: mentionsMe)
+                                  kind: kind, body: body, isMine: isMine, mentionsMe: mentionsMe,
+                                  avatarURL: RvrbAPI.imageURL(m["image"]))
 
         // The backlog loaded on join doesn't call for attention, only live messages do.
         if live && mentionsMe { requestAttention() }
@@ -366,6 +396,7 @@ final class RvrbClient {
 
         case "pauseChannelTrack":
             nowPlaying = nil
+            voters = [:]
             Task { await player.stop() }
 
         case "refreshDjStack":
@@ -409,6 +440,7 @@ final class RvrbClient {
         users = list.compactMap(ChannelUser.init)
             .sorted { ($0.role, $1.name.lowercased()) > ($1.role, $0.name.lowercased()) }
         names = Dictionary(users.map { ($0.id, $0.name) }) { first, _ in first }
+        usersById = Dictionary(users.map { ($0.id, $0) }) { first, _ in first }
     }
 
     // MARK: Playing track and votes
@@ -416,6 +448,8 @@ final class RvrbClient {
     /// From `playChannelTrack`. The clocks can differ, so `endsAt` is placed on the local clock with the server's
     /// `syncTime` (its time when it sent the message).
     private func setTrack(_ p: JSON?) {
+        voters = [:]
+
         guard let track = Track(p?["track"]) else {
             nowPlaying = nil
             return
@@ -438,6 +472,7 @@ final class RvrbClient {
         guard var playing = nowPlaying, let votes = voting.object else { return }
 
         var tally = Votes()
+        var byVoter: [String: MyVote] = [:]
 
         if let dope = voting["dope"]?.int, let nope = voting["nope"]?.int {
             // Plain totals don't say who voted: keep the vote this client last sent.
@@ -448,12 +483,15 @@ final class RvrbClient {
                 tally.dope += dope ? 1 : 0
                 tally.nope += nope ? 1 : 0
                 tally.star += star ? 1 : 0
+                byVoter[voter] = MyVote(dope: dope, nope: nope, star: star)
                 if voter == me.id { tally.mine = MyVote(dope: dope, nope: nope, star: star) }
             }
         }
 
         playing.votes = tally
         nowPlaying = playing
+        // Plain totals say nothing about who voted: keep what's known.
+        if !byVoter.isEmpty || voting["dope"]?.int == nil { voters = byVoter }
     }
 
     /// Toggles a vote. Only the toggled key is sent, so a vote made in another client isn't overwritten. Dope and
@@ -484,6 +522,7 @@ final class RvrbClient {
             // The server's next meter update confirms it; show it now.
             if nowPlaying?.track.id == playing.track.id {
                 nowPlaying?.votes.mine = next
+                voters[me.id] = next
             }
 
             // The server records the star but doesn't touch the bookmark playlist; the web app adds it itself.

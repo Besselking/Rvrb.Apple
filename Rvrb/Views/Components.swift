@@ -70,8 +70,39 @@ struct Avatar: View {
     let name: String
     let url: URL?
     let seed: String
+    var activity: UserActivity = .listening
+    var size: CGFloat = Avatar.size
 
     var body: some View {
+        picture
+            .overlay(alignment: .bottomTrailing) { badge }
+            .accessibilityHidden(true)
+    }
+
+    /// The state badge, for users without their own DJ/dope/nope pictures (and to make it obvious for those with).
+    @ViewBuilder
+    private var badge: some View {
+        if let (symbol, color) = badgeStyle {
+            Image(systemName: symbol)
+                .font(.system(size: size * 0.3, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: size * 0.48, height: size * 0.48)
+                .background(color, in: Circle())
+                .overlay(Circle().stroke(.background, lineWidth: 1.5))
+                .offset(x: size * 0.08, y: size * 0.08)
+        }
+    }
+
+    private var badgeStyle: (String, Color)? {
+        switch activity {
+        case .listening: nil
+        case .djing: ("music.mic", .accentColor)
+        case .doped: ("hand.thumbsup.fill", .green)
+        case .noped: ("hand.thumbsdown.fill", .red)
+        }
+    }
+
+    private var picture: some View {
         Group {
             if let url {
                 AsyncImage(url: url) { image in
@@ -83,16 +114,15 @@ struct Avatar: View {
                 initial
             }
         }
-        .frame(width: Self.size, height: Self.size)
+        .frame(width: size, height: size)
         .clipShape(Circle())
-        .accessibilityHidden(true)
     }
 
     private var initial: some View {
         ZStack {
             Circle().fill(Self.color(for: seed).gradient)
             Text(name.first.map { String($0).uppercased() } ?? "?")
-                .font(.system(size: Self.size * 0.45, weight: .semibold))
+                .font(.system(size: size * 0.45, weight: .semibold))
                 .foregroundStyle(.white)
         }
     }

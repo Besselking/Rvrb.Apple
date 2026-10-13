@@ -83,6 +83,10 @@ struct ChannelUser: Identifiable, Hashable {
     let name: String
     let userName: String?
     let imageURL: URL?
+    /// Shown while the user DJs, and after they doped or noped the playing track (custom uploads, often unset).
+    let djImageURL: URL?
+    let dopeImageURL: URL?
+    let nopeImageURL: URL?
     let role: Int
     let mobile: Bool
 
@@ -91,7 +95,10 @@ struct ChannelUser: Identifiable, Hashable {
         self.id = id
         userName = json["userName"]?.nonEmptyString
         name = json["displayName"]?.nonEmptyString ?? userName ?? "Unknown"
-        imageURL = json["image"]?.string.flatMap { $0.hasPrefix("http") ? URL(string: $0) : nil }
+        imageURL = RvrbAPI.imageURL(json["image"])
+        djImageURL = RvrbAPI.imageURL(json["djImage"])
+        dopeImageURL = RvrbAPI.imageURL(json["thumbsUpImage"])
+        nopeImageURL = RvrbAPI.imageURL(json["thumbsDownImage"])
         // The spec has `role`, the server doesn't send it (roles live in the channel's `roles`).
         role = json["role"]?.int ?? 0
         mobile = json["mobile"]?.bool ?? false

@@ -14,9 +14,11 @@ struct ChatView: View {
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(messages.indices, id: \.self) { index in
                     let message = messages[index]
+                    let userId = message.userId ?? ""
                     MessageRow(message: message,
                                showsHeader: showsHeader(messages, at: index),
-                               avatarURL: message.userId.flatMap { client.user($0)?.imageURL })
+                               avatarURL: client.avatarURL(for: userId, fallback: message.avatarURL),
+                               activity: client.activity(of: userId))
                         .id(message.id)
                 }
             }
@@ -49,6 +51,7 @@ struct MessageRow: View {
     let message: ChatMessage
     let showsHeader: Bool
     let avatarURL: URL?
+    var activity: UserActivity = .listening
 
     var body: some View {
         switch message.kind {
@@ -79,7 +82,7 @@ struct MessageRow: View {
         case .chat, .whisper, .bot:
             HStack(alignment: .top, spacing: 10) {
                 if showsHeader {
-                    Avatar(name: message.name, url: avatarURL, seed: message.userId ?? message.name)
+                    Avatar(name: message.name, url: avatarURL, seed: message.userId ?? message.name, activity: activity)
                 } else {
                     Color.clear.frame(width: Avatar.size, height: 1)
                 }
