@@ -17,6 +17,16 @@ final class AppModel {
     }
 
     let session = Session()
+
+    init() {
+        // The share extension added tracks: reload the queue if the app is running.
+        CFNotificationCenterAddObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(), nil,
+            { _, _, _, _, _ in
+                Task { @MainActor in await AppModel.shared.client?.loadQueue() }
+            },
+            QueueChangeNotification.name as CFString, nil, .deliverImmediately)
+    }
     private(set) var phase: Phase = .loggedOut
     var loginMessage: String?
 

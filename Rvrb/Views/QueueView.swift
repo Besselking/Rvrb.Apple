@@ -86,7 +86,8 @@ struct QueueView: View {
             }
             .navigationTitle("Your Queue")
             .refreshable { perform { try await queue.reload() } }
-            .task { if !queue.isLoaded { perform { try await queue.reload() } } }
+            // Always fresh: tracks can be added from the web app or the share sheet.
+            .task { perform { try await queue.reload() } }
             #if os(iOS)
             .navigationDestination(isPresented: $showsSearch) {
                 SearchView(client: client)

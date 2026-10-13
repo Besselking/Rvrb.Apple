@@ -80,6 +80,7 @@ final class ShareModel {
         do {
             let queue = try await api.djQueueId()
             let (tracks, playlists) = try await api.add(items, toStack: queue, at: playNext ? 0 : nil)
+            QueueChangeNotification.post()
 
             var parts: [String] = []
             if tracks.count == 1 {
