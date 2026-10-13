@@ -26,6 +26,7 @@ struct ChatView: View {
         }
         .scrollPosition($position)
         .defaultScrollAnchor(.bottom)
+        .scrollDismissesKeyboard(.interactively)
         .onScrollGeometryChange(for: Bool.self) { geometry in
             geometry.contentOffset.y + geometry.containerSize.height >= geometry.contentSize.height - 60
         } action: { _, atBottom in

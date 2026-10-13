@@ -22,6 +22,20 @@ struct ComposerView: View {
                 .onSubmit(send)
                 .disabled(client.channel == nil)
 
+            #if os(iOS)
+            if isFocused {
+                Button {
+                    isFocused = false
+                } label: {
+                    Image(systemName: "keyboard.chevron.compact.down")
+                        .font(.title3)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Hide Keyboard")
+                .transition(.opacity.combined(with: .scale))
+            }
+            #endif
+
             Button(action: send) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.title)
@@ -32,6 +46,7 @@ struct ComposerView: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
+        .animation(.snappy(duration: 0.2), value: isFocused)
         .onChange(of: text) { _, new in
             if new.count > client.chatMaxLength {
                 text = String(new.prefix(client.chatMaxLength))
