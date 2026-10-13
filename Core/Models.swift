@@ -46,6 +46,15 @@ struct Channel: Identifiable, Hashable {
     var title: String { json["title"]?.nonEmptyString ?? json["slug"]?.nonEmptyString ?? "Untitled channel" }
     var genre: String? { json["genre"]?.nonEmptyString }
     var greeting: String? { json["greeting"]?.nonEmptyString }
+    var slug: String? { json["slug"]?.nonEmptyString }
+    var infoLink: URL? { json["infoLink"]?.nonEmptyString.flatMap(URL.init(string:)) }
+    var calendarLink: URL? { json["channelCalendarLink"]?.nonEmptyString.flatMap(URL.init(string:)) }
+    var promoImageURL: URL? { RvrbAPI.imageURL(json["promoImageUrl"]) }
+    var promoLink: URL? { json["promoImageHref"]?.nonEmptyString.flatMap(URL.init(string:)) }
+    var followerCount: Int? { json["followers"]?.array?.count }
+    var maxDJs: Int? { json["limitDjs"]?.bool == false ? nil : json["maxDjs"]?.int }
+    var maxTurns: Int? { json["maxTurns"]?.int }
+    var created: Date? { json["createdDate"]?.string.flatMap(Date.init(rvrb:)) }
 
     /// `users` is an array of the users in it.
     var listenerCount: Int { json["users"]?.array?.count ?? 0 }
@@ -138,6 +147,20 @@ struct Device: Identifiable, Hashable {
         case "automobile": "car"
         case "gameconsole": "gamecontroller"
         default: "hifispeaker.and.homepod"
+        }
+    }
+}
+
+extension Date {
+    /// RVRB dates: ISO 8601 with or without milliseconds, or epoch milliseconds/seconds.
+    init?(rvrb text: String) {
+        if let number = Double(text) {
+            self = Date(timeIntervalSince1970: number > 1e11 ? number / 1000 : number)
+        } else if let date = (try? Date(text, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)))
+                    ?? (try? Date(text, strategy: .iso8601)) {
+            self = date
+        } else {
+            return nil
         }
     }
 }

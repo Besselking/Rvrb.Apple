@@ -96,6 +96,17 @@ final class RvrbAPI {
         _ = try await send(follow ? "PUT" : "DELETE", "api/channel/\(Self.escape(channelId))/followers/me")
     }
 
+    /// `GET /api/channel/{id}`: the channel, fresh (descriptions, links, limits, followers).
+    func channel(id: String) async throws -> Channel? {
+        Channel(try await get("api/channel/\(Self.escape(id))"))
+    }
+
+    /// `GET /api/channel/{id}/history`: the tracks played, newest first (`track`, `playedBy`, `voteSummary`,
+    /// `timestamp`, `skipped`). Only for users joined to the channel.
+    func channelHistory(channelId: String) async throws -> [JSON] {
+        try await get("api/channel/\(Self.escape(channelId))/history")["history"]?.array ?? []
+    }
+
     /// `GET /api/channel/{id}/bot`: the channel's own bot (name and pictures); empty when it has none. Only for
     /// users joined to the channel.
     func channelBot(channelId: String) async throws -> JSON {

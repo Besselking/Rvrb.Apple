@@ -27,7 +27,7 @@ struct RoomView: View {
     }
 
     enum Sheet: Identifiable, Hashable {
-        case queue, search, devices, people
+        case queue, search, devices, people, info
         case profile(userId: String)
 
         var id: String {
@@ -36,6 +36,7 @@ struct RoomView: View {
             case .search: "search"
             case .devices: "devices"
             case .people: "people"
+            case .info: "info"
             case .profile(let userId): "profile-\(userId)"
             }
         }
@@ -105,12 +106,47 @@ struct RoomView: View {
             case .devices: DevicesView(client: client)
             case .people: PeopleSheet(client: client)
             case .profile(let userId): ProfileSheet(client: client, userId: userId)
+            case .info:
+                if let channel = client.channel { ChannelInfoSheet(client: client, channel: channel) }
             }
         }
     }
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
+        #if os(iOS)
+        // The channel's name opens its info (description, rules, history).
+        ToolbarItem(placement: .principal) {
+            Button {
+                sheet = .info
+            } label: {
+                VStack(spacing: 0) {
+                    Text(title)
+                        .font(.headline)
+                        .lineLimit(1)
+                    if client.channel != nil {
+                        Text("Channel info")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(client.channel == nil)
+            .accessibilityHint("Shows the channel's description and play history")
+        }
+        #else
+        ToolbarItem(placement: .navigation) {
+            Button {
+                sheet = .info
+            } label: {
+                Label("Channel Info", systemImage: "info.circle")
+            }
+            .help("The channel's description, rules and play history")
+            .disabled(client.channel == nil)
+        }
+        #endif
+
         ToolbarItemGroup(placement: .primaryAction) {
             Button {
                 Task { await client.toggleDJ() }
@@ -140,6 +176,8 @@ struct RoomView: View {
             .help("DJs and listeners")
 
             Menu {
+                Button("Channel Info…", systemImage: "info.circle") { sheet = .info }
+                    .disabled(client.channel == nil)
                 Button("Add Tracks…", systemImage: "plus") { sheet = .search }
                 Button("Spotify Device…", systemImage: "hifispeaker") { sheet = .devices }
 
@@ -299,6 +337,30 @@ private struct ProfileSheet: View {
         .presentationDetents([.medium, .large])
         #else
         .frame(minWidth: 420, minHeight: 560)
+        #endif
+    }
+}
+
+private struct ChannelInfoSheet: View {
+    let client: RvrbClient
+    let channel: Channel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ChannelInfoView(client: client, channel: channel)
+                #if os(iOS)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
+                }
+                #else
+                .sheetBar { Button("Done") { dismiss() }.keyboardShortcut(.defaultAction) }
+                #endif
+        }
+        #if os(macOS)
+        .frame(minWidth: 460, minHeight: 600)
         #endif
     }
 }
