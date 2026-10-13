@@ -2,6 +2,8 @@ import Foundation
 import Observation
 #if os(macOS)
 import AppKit
+#else
+import UIKit
 #endif
 
 /// Everything about the logged-in user's session in a channel: the websocket, the joined channel's chat, people,
@@ -43,7 +45,7 @@ final class RvrbClient {
     @ObservationIgnored private var starredPlaylist: String?
     /// "@name" mentions to highlight: the display name and the username.
     @ObservationIgnored private let mentions: [String]
-    @ObservationIgnored private var isHidden = false
+    @ObservationIgnored private var isHidden = RvrbClient.launchedInBackground
     #if os(iOS)
     @ObservationIgnored private(set) var liveActivity: LiveActivityController!
     @ObservationIgnored private let backgroundGrace = BackgroundGrace(name: "Keep the RVRB connection")
@@ -263,13 +265,49 @@ final class RvrbClient {
         #if os(iOS)
         if hidden {
             backgroundGrace.begin()
+            scheduleBackgroundRefresh()
         } else {
             backgroundGrace.end()
+            BackgroundRefresh.cancel()
             socket.reconnectIfNeeded()
         }
         sendAppState()
         #endif
     }
+
+    #if os(iOS)
+    private static var launchedInBackground: Bool {
+        UIApplication.shared.applicationState == .background
+    }
+
+    /// While in a channel, ask to be woken when the playing track ends (when the Live Activity goes stale).
+    func scheduleBackgroundRefresh() {
+        guard channel != nil || liveActivity.channel != nil else { return }
+        BackgroundRefresh.schedule(after: nowPlaying?.end.addingTimeInterval(2))
+    }
+
+    /// A background wake: reconnect, rejoin the channel (the Live Activity's one if the app was relaunched),
+    /// and wait for the server's state so the Live Activity updates; then iOS suspends the app again.
+    func refreshInBackground() async {
+        guard let target = channel ?? joining ?? liveActivity.channel else { return }
+
+        socket.reconnectIfNeeded()
+        if channel?.id != target.id, joining?.id != target.id {
+            Task { await join(target) }
+        }
+
+        let deadline = Date.now.addingTimeInterval(20)
+        while !(isInRoom && channel?.id == target.id) {
+            guard Date.now < deadline, !Task.isCancelled else { return }
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+
+        // The track, DJs and users follow the join's answer; give them and the Live Activity update a moment.
+        try? await Task.sleep(for: .seconds(2))
+    }
+    #else
+    private static let launchedInBackground = false
+    #endif
 
     private func sendAppState() {
         guard socket.isReady else { return }

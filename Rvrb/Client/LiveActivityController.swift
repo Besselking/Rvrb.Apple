@@ -27,6 +27,12 @@ final class LiveActivityController {
         }
     }
 
+    /// The running activity's channel: after a relaunch in the background, the channel to rejoin.
+    var channel: Channel? {
+        guard let activityId, let attributes = Self.activity(activityId)?.attributes else { return nil }
+        return Channel(["_id": .string(attributes.channelId), "title": .string(attributes.channelTitle)])
+    }
+
     init(client: RvrbClient) {
         self.client = client
     }

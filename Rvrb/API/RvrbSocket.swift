@@ -51,6 +51,7 @@ final class RvrbSocket {
     @ObservationIgnored private var task: URLSessionWebSocketTask?
     @ObservationIgnored private var loop: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
+    @ObservationIgnored private var lastReceived = Date.distantPast
     @ObservationIgnored private var nextId = 0
     @ObservationIgnored private var pending: [Int: CheckedContinuation<JSON, Error>] = [:]
 
@@ -60,15 +61,30 @@ final class RvrbSocket {
 
     func start() {
         loop?.cancel()
-        task?.cancel(with: .goingAway, reason: nil)
         generation += 1
+
+        if let task {
+            // The old loop sees the new generation and leaves quietly; wind its connection down here.
+            task.cancel(with: .goingAway, reason: nil)
+            self.task = nil
+            failPending("Disconnected")
+            onDisconnect()
+        }
+
         let generation = generation
         loop = Task { await run(generation: generation) }
     }
 
-    /// Reconnects right away when not connected (back in the foreground, or a manual retry).
+    /// Reconnects right away unless the connection is up and alive (back in the foreground, a background wake,
+    /// or a manual retry). A socket frozen while the app was suspended can still look connected, so it also counts
+    /// as down once the server has been silent for longer than its keepAwake interval (about a minute).
     func reconnectIfNeeded() {
-        if status != .connected && status != .connecting {
+        switch status {
+        case .connecting:
+            return
+        case .connected where Date.now.timeIntervalSince(lastReceived) < 75:
+            return
+        default:
             start()
         }
     }
@@ -156,6 +172,7 @@ final class RvrbSocket {
                     }
 
                     guard generation == self.generation else { return }
+                    lastReceived = .now
                     if Log.verbose { Log.socket.debug("<< \(text, privacy: .public)") }
 
                     switch handle(text) {
