@@ -3,9 +3,7 @@
 A SwiftUI client for [RVRB](https://app.rvrb.one): channels, chat, voting, DJing from your RVRB queue, and the
 channel's music played on your Spotify. One multiplatform target (iOS 26 / macOS 26), no dependencies.
 
-The API behaviour it relies on is documented in the
-[RVRB API notes](https://github.com/Besselking/Rvrb.TUI/blob/main/docs/rvrb-api-notes.md), written while building the
-terminal client, [Rvrb.TUI](https://github.com/Besselking/Rvrb.TUI); this app ports that client's logic.
+It ports the logic of the terminal client, [Rvrb.TUI](https://github.com/Besselking/Rvrb.TUI).
 
 ## Building
 
