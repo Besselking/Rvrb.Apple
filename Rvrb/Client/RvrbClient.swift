@@ -46,6 +46,7 @@ final class RvrbClient {
     @ObservationIgnored private var isHidden = false
     #if os(iOS)
     @ObservationIgnored private(set) var liveActivity: LiveActivityController!
+    @ObservationIgnored private let backgroundGrace = BackgroundGrace(name: "Keep the RVRB connection")
     #endif
 
     init(api: RvrbAPI, session: Session, me: Me, chatMaxLength: Int) {
@@ -254,10 +255,18 @@ final class RvrbClient {
 
     /// A hidden mobile client gets no heartbeats and is kept for an hour after its socket closes. For a mobile
     /// client with Spotify the server starts playback itself (`playChannelTrack` then has `playTrack: false`).
+    ///
+    /// Going to the background also asks iOS for a little more time, so a quick switch (say to Spotify) keeps the
+    /// connection; after that the app is suspended until it comes back or a Live Activity vote wakes it.
     func setHidden(_ hidden: Bool) {
         isHidden = hidden
         #if os(iOS)
-        if !hidden { socket.reconnectIfNeeded() }
+        if hidden {
+            backgroundGrace.begin()
+        } else {
+            backgroundGrace.end()
+            socket.reconnectIfNeeded()
+        }
         sendAppState()
         #endif
     }
