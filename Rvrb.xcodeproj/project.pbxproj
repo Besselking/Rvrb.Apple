@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		AA000000000000000000001A /* RvrbWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000010 /* RvrbWidgets.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		AA000000000000000000002A /* RvrbShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000021 /* RvrbShare.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -17,6 +18,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = AA0000000000000000000013;
 			remoteInfo = RvrbWidgets;
+		};
+		AA000000000000000000002C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AA000000000000000000000A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AA0000000000000000000023;
+			remoteInfo = RvrbShare;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -28,6 +36,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				AA000000000000000000001A /* RvrbWidgets.appex in Embed Foundation Extensions */,
+				AA000000000000000000002A /* RvrbShare.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -37,6 +46,7 @@
 /* Begin PBXFileReference section */
 		AA0000000000000000000001 /* Rvrb.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Rvrb.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000000010 /* RvrbWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RvrbWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA0000000000000000000021 /* RvrbShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RvrbShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -60,6 +70,11 @@
 			path = Shared;
 			sourceTree = "<group>";
 		};
+		AA0000000000000000000022 /* RvrbShare */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = RvrbShare;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -77,6 +92,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA0000000000000000000028 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -87,6 +109,7 @@
 				AA0000000000000000000020 /* Core */,
 				AA0000000000000000000012 /* Shared */,
 				AA0000000000000000000011 /* RvrbWidgets */,
+				AA0000000000000000000022 /* RvrbShare */,
 				AA0000000000000000000005 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -96,6 +119,7 @@
 			children = (
 				AA0000000000000000000001 /* Rvrb.app */,
 				AA0000000000000000000010 /* RvrbWidgets.appex */,
+				AA0000000000000000000021 /* RvrbShare.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -116,6 +140,7 @@
 			);
 			dependencies = (
 				AA000000000000000000001D /* PBXTargetDependency */,
+				AA000000000000000000002D /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				AA0000000000000000000002 /* Rvrb */,
@@ -152,6 +177,29 @@
 			productReference = AA0000000000000000000010 /* RvrbWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		AA0000000000000000000023 /* RvrbShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA0000000000000000000024 /* Build configuration list for PBXNativeTarget "RvrbShare" */;
+			buildPhases = (
+				AA0000000000000000000027 /* Sources */,
+				AA0000000000000000000028 /* Frameworks */,
+				AA0000000000000000000029 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				AA0000000000000000000022 /* RvrbShare */,
+				AA0000000000000000000020 /* Core */,
+			);
+			name = RvrbShare;
+			packageProductDependencies = (
+			);
+			productName = RvrbShare;
+			productReference = AA0000000000000000000021 /* RvrbShare.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -166,6 +214,9 @@
 						CreatedOnToolsVersion = 27.0;
 					};
 					AA0000000000000000000013 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					AA0000000000000000000023 = {
 						CreatedOnToolsVersion = 27.0;
 					};
 				};
@@ -186,6 +237,7 @@
 			targets = (
 				AA0000000000000000000006 /* Rvrb */,
 				AA0000000000000000000013 /* RvrbWidgets */,
+				AA0000000000000000000023 /* RvrbShare */,
 			);
 		};
 /* End PBXProject section */
@@ -199,6 +251,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		AA0000000000000000000019 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA0000000000000000000029 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -222,6 +281,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA0000000000000000000027 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -230,6 +296,12 @@
 			platformFilter = ios;
 			target = AA0000000000000000000013 /* RvrbWidgets */;
 			targetProxy = AA000000000000000000001C /* PBXContainerItemProxy */;
+		};
+		AA000000000000000000002D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			platformFilter = ios;
+			target = AA0000000000000000000023 /* RvrbShare */;
+			targetProxy = AA000000000000000000002C /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -298,6 +370,7 @@
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphone*]" = "Config/Rvrb-iOS.entitlements";
 				"INFOPLIST_FILE[sdk=iphone*]" = "Config/Rvrb-iOS-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Rvrb;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
@@ -338,6 +411,7 @@
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphone*]" = "Config/Rvrb-iOS.entitlements";
 				"INFOPLIST_FILE[sdk=iphone*]" = "Config/Rvrb-iOS-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Rvrb;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
@@ -427,6 +501,68 @@
 			};
 			name = Release;
 		};
+		AA0000000000000000000025 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/RvrbShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/RvrbShare-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Rvrb;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.marijn.Rvrb.Share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AA0000000000000000000026 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/RvrbShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/RvrbShare-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Rvrb;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.marijn.Rvrb.Share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -453,6 +589,15 @@
 			buildConfigurations = (
 				AA0000000000000000000015 /* Debug */,
 				AA0000000000000000000016 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA0000000000000000000024 /* Build configuration list for PBXNativeTarget "RvrbShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA0000000000000000000025 /* Debug */,
+				AA0000000000000000000026 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
