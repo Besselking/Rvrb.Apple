@@ -10,6 +10,8 @@ struct RemoteImage<Placeholder: View>: View {
     /// The largest side to decode to, in pixels (the displayed size times the screen scale is plenty).
     var maxPixelSize: CGFloat = 512
     var contentMode: ContentMode = .fill
+    /// When false the image is never drawn larger than its pixel size (in points, as browsers do).
+    var upscales = true
     @ViewBuilder var placeholder: (_ failed: Bool) -> Placeholder
 
     init(url: URL?, maxPixelSize: CGFloat = 512, contentMode: ContentMode = .fill,
@@ -18,12 +20,15 @@ struct RemoteImage<Placeholder: View>: View {
                   placeholder: placeholder)
     }
 
-    init(source: ChatText.Image?, maxPixelSize: CGFloat = 512, contentMode: ContentMode = .fill,
+    init(source: ChatText.Image?, maxPixelSize: CGFloat = 512, contentMode: ContentMode = .fill, upscales: Bool = true,
          @ViewBuilder placeholder: @escaping (_ failed: Bool) -> Placeholder) {
         self.source = source
         self.maxPixelSize = maxPixelSize
         self.contentMode = contentMode
+        self.upscales = upscales
         self.placeholder = placeholder
+        // Already decoded (scrolled back to): show it at once, without a placeholder in between.
+        _image = State(initialValue: source.flatMap { ImageLoader.cached($0, maxPixelSize: maxPixelSize) })
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -45,9 +50,16 @@ struct RemoteImage<Placeholder: View>: View {
             }
         }
         .task(id: source) {
-            image = nil
             failed = false
-            guard let source else { return }
+            guard let source else {
+                image = nil
+                return
+            }
+            if let cached = ImageLoader.cached(source, maxPixelSize: maxPixelSize) {
+                image = cached
+                return
+            }
+            image = nil
 
             do {
                 image = try await ImageLoader.shared.image(source, maxPixelSize: maxPixelSize)
@@ -61,6 +73,7 @@ struct RemoteImage<Placeholder: View>: View {
         Image(decorative: cgImage, scale: 1)
             .resizable()
             .aspectRatio(contentMode: contentMode)
+            .frame(maxWidth: upscales ? nil : CGFloat(cgImage.width), maxHeight: upscales ? nil : CGFloat(cgImage.height))
     }
 }
 
@@ -104,12 +117,13 @@ actor ImageLoader {
         let maxPixelSize: Int
     }
 
-    private final class Entry {
+    private nonisolated final class Entry: Sendable {
         let image: DecodedImage
         init(_ image: DecodedImage) { self.image = image }
     }
 
-    private let cache = NSCache<NSString, Entry>()
+    /// NSCache is thread-safe (documented, not annotated), so views can read it synchronously.
+    private nonisolated(unsafe) static let cache = NSCache<NSString, Entry>()
     private var loading: [Key: Task<DecodedImage, Error>] = [:]
     private let session: URLSession = {
         let configuration = URLSessionConfiguration.default
@@ -118,7 +132,14 @@ actor ImageLoader {
     }()
 
     init() {
-        cache.totalCostLimit = 96 << 20
+        Self.cache.totalCostLimit = 96 << 20
+    }
+
+    /// A decoded image already in memory. Only URLs are looked up: hashing embedded data on every view update
+    /// would cost more than it saves.
+    nonisolated static func cached(_ source: ChatText.Image, maxPixelSize: CGFloat) -> DecodedImage? {
+        guard case .url(let url) = source else { return nil }
+        return cache.object(forKey: "\(Int(maxPixelSize))|\(url.absoluteString)" as NSString)?.image
     }
 
     func image(_ source: ChatText.Image, maxPixelSize: CGFloat) async throws -> DecodedImage {
@@ -129,7 +150,7 @@ actor ImageLoader {
         let key = Key(id: id, maxPixelSize: Int(maxPixelSize))
         let cacheKey = "\(key.maxPixelSize)|\(id)" as NSString
 
-        if let entry = cache.object(forKey: cacheKey) { return entry.image }
+        if let entry = Self.cache.object(forKey: cacheKey) { return entry.image }
         if let task = loading[key] { return try await task.value }
 
         let session = session
@@ -152,7 +173,7 @@ actor ImageLoader {
         defer { loading[key] = nil }
 
         let image = try await task.value
-        cache.setObject(Entry(image), forKey: cacheKey, cost: image.cost)
+        Self.cache.setObject(Entry(image), forKey: cacheKey, cost: image.cost)
         return image
     }
 

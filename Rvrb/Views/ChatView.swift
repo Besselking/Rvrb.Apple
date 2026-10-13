@@ -131,18 +131,22 @@ struct MessageRow: View {
     }
 }
 
+/// A chat image in a box of fixed height: images load after the row is laid out, and a row that grew then would
+/// shift everything below it while scrolling.
 private struct ChatImageView: View {
+    static let height: CGFloat = 180
+
     let image: ChatText.Image
 
     var body: some View {
-        RemoteImage(source: image, maxPixelSize: 780, contentMode: .fit) { failed in
+        RemoteImage(source: image, maxPixelSize: 780, contentMode: .fit, upscales: false) { failed in
             if failed {
                 Label("Image", systemImage: "photo").foregroundStyle(.secondary)
             } else {
                 ProgressView()
             }
         }
-        .frame(maxWidth: 260, maxHeight: 220, alignment: .leading)
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .frame(maxWidth: 260, minHeight: Self.height, maxHeight: Self.height, alignment: .leading)
     }
 }
