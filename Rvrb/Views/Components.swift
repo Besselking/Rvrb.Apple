@@ -1,28 +1,12 @@
 import SwiftUI
 
-#if os(iOS)
-typealias PlatformImage = UIImage
-
-extension Image {
-    init(platformImage: UIImage) { self.init(uiImage: platformImage) }
-}
-#else
-typealias PlatformImage = NSImage
-
-extension Image {
-    init(platformImage: NSImage) { self.init(nsImage: platformImage) }
-}
-#endif
-
 /// Album artwork with a placeholder.
 struct Artwork: View {
     let url: URL?
     let size: CGFloat
 
     var body: some View {
-        AsyncImage(url: url) { image in
-            image.resizable().scaledToFill()
-        } placeholder: {
+        RemoteImage(url: url, maxPixelSize: size * 3) { _ in
             ZStack {
                 Rectangle().fill(.quaternary)
                 Image(systemName: "music.note")
@@ -105,9 +89,7 @@ struct Avatar: View {
     private var picture: some View {
         Group {
             if let url {
-                AsyncImage(url: url) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
+                RemoteImage(url: url, maxPixelSize: size * 3) { _ in
                     initial
                 }
             } else {

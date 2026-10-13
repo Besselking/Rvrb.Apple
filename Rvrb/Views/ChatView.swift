@@ -134,22 +134,11 @@ private struct ChatImageView: View {
     let image: ChatText.Image
 
     var body: some View {
-        Group {
-            switch image {
-            case .url(let url):
-                AsyncImage(url: url) { phase in
-                    if let image = phase.image {
-                        image.resizable().scaledToFit()
-                    } else if phase.error != nil {
-                        Label("Image", systemImage: "photo").foregroundStyle(.secondary)
-                    } else {
-                        ProgressView()
-                    }
-                }
-            case .data(let data):
-                if let image = PlatformImage(data: data) {
-                    Image(platformImage: image).resizable().scaledToFit()
-                }
+        RemoteImage(source: image, maxPixelSize: 780, contentMode: .fit) { failed in
+            if failed {
+                Label("Image", systemImage: "photo").foregroundStyle(.secondary)
+            } else {
+                ProgressView()
             }
         }
         .frame(maxWidth: 260, maxHeight: 220, alignment: .leading)
