@@ -40,16 +40,23 @@ func draw(_ ctx: CGContext, size: CGFloat, rounded: Bool) {
 
     // An eighth note: a tilted head, a stem, and a flag.
     let head = p(0.33, 0.33)
+    let (a, b, tilt) = (w * 0.115, w * 0.08, CGFloat.pi * 0.16)
+
+    // The stem's outer edge meets the head where the tilted ellipse reaches furthest right, so nothing pokes out.
+    let reach = (a * a * cos(tilt) * cos(tilt) + b * b * sin(tilt) * sin(tilt)).squareRoot()
+    let reachY = (a * a - b * b) * sin(tilt) * cos(tilt) / reach
+    let stemWidth = w * 0.05
+    let stemX = head.x + reach - stemWidth
+    let stemTop = p(0, 0.78).y
+    ctx.fill(CGRect(x: stemX, y: head.y + reachY, width: stemWidth, height: stemTop - head.y - reachY))
+    // A rounded top, where the flag starts.
+    ctx.fillEllipse(in: CGRect(x: stemX, y: stemTop - stemWidth / 2, width: stemWidth, height: stemWidth))
+
     ctx.saveGState()
     ctx.translateBy(x: head.x, y: head.y)
-    ctx.rotate(by: .pi * 0.16)
-    ctx.fillEllipse(in: CGRect(x: -w * 0.115, y: -w * 0.08, width: w * 0.23, height: w * 0.16))
+    ctx.rotate(by: tilt)
+    ctx.fillEllipse(in: CGRect(x: -a, y: -b, width: a * 2, height: b * 2))
     ctx.restoreGState()
-
-    let stemX = head.x + w * 0.085
-    let stemWidth = w * 0.05
-    let stemTop = p(0, 0.78).y
-    ctx.fill(CGRect(x: stemX, y: head.y + w * 0.02, width: stemWidth, height: stemTop - head.y - w * 0.02))
 
     let flag = CGMutablePath()
     flag.move(to: CGPoint(x: stemX + stemWidth / 2, y: stemTop))
