@@ -11,6 +11,8 @@ struct UserProfileView: View {
     @State private var achievements: [JSON] = []
     @State private var error: String?
     @State private var isChangingFollow = false
+    /// Until the profile, statistics and achievements have all arrived (or failed).
+    @State private var isLoading = true
 
     var body: some View {
         List {
@@ -72,6 +74,18 @@ struct UserProfileView: View {
                     ForEach(Array(achievements.enumerated()), id: \.offset) { _, achievement in
                         AchievementRow(achievement: achievement)
                     }
+                }
+            }
+
+            if isLoading {
+                Section {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                        Text(profile == nil ? "Loading profile…" : "Loading stats and achievements…")
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .listRowBackground(Color.clear)
                 }
             }
         }
@@ -207,11 +221,14 @@ struct UserProfileView: View {
     // MARK: Loading
 
     private func load() async {
-        await client.loadFollowedUsers()
+        isLoading = true
+        defer { isLoading = false }
 
         async let profile = client.api.publicProfile(userId: userId)
         async let statistics = client.api.statistics(userId: userId)
         async let achievements = client.api.achievements(userId: userId)
+        // For the Follow button, alongside the rest.
+        await client.loadFollowedUsers()
 
         do {
             self.profile = try await profile
