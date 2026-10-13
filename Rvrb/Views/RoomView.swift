@@ -132,6 +132,13 @@ struct RoomView: View {
                     Label("Play on Spotify", systemImage: "play.circle")
                 }
 
+                if let channel = client.channel {
+                    Toggle(isOn: Binding(get: { client.isFollowing(channel) },
+                                         set: { follow in Task { await client.setFollowing(follow, channel) } })) {
+                        Label("Follow Channel", systemImage: "heart")
+                    }
+                }
+
                 #if os(iOS)
                 Toggle(isOn: Binding(get: { client.liveActivity.isEnabled },
                                      set: { client.liveActivity.isEnabled = $0 })) {

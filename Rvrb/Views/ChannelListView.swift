@@ -1,11 +1,13 @@
 import SwiftUI
 
-/// Popular channels (16 per page, most listeners first), or all channels matching a search.
+/// The channel lists the web app has (popular, followed, the user's own, all), 16 per page with the most listeners
+/// first, searchable. Searching Popular searches all channels: popular only has channels with someone in them.
 struct ChannelListView: View {
     let client: RvrbClient
     @Binding var selection: Channel?
 
     @Environment(AppModel.self) private var model
+    @AppStorage("channelList") private var list: RvrbAPI.ChannelList = .popular
     @State private var query = ""
     @State private var channels: [Channel] = []
     @State private var page = 0
@@ -21,7 +23,8 @@ struct ChannelListView: View {
             }
 
             ForEach(channels) { channel in
-                ChannelRow(channel: channel, isJoined: client.channel?.id == channel.id)
+                ChannelRow(channel: channel, isJoined: client.channel?.id == channel.id,
+                           isFollowed: client.followedChannelIds.contains(channel.id))
                     .tag(channel)
                     .onAppear {
                         if channel == channels.last, hasMore, !isLoading {
@@ -41,18 +44,41 @@ struct ChannelListView: View {
                 if isLoading {
                     ProgressView()
                 } else if error == nil {
-                    if query.isEmpty {
-                        ContentUnavailableView("No Busy Channels", systemImage: "music.note.house",
-                                               description: Text("Search to find a channel to join."))
-                    } else {
+                    if !query.isEmpty {
                         ContentUnavailableView.search(text: query)
+                    } else {
+                        switch list {
+                        case .popular:
+                            ContentUnavailableView("No Busy Channels", systemImage: "music.note.house",
+                                                   description: Text("Search to find a channel to join."))
+                        case .followed:
+                            ContentUnavailableView("No Followed Channels", systemImage: "heart",
+                                                   description: Text("Follow a channel from its ⋯ menu to find it here."))
+                        case .mine:
+                            ContentUnavailableView("No Channels of Your Own", systemImage: "person.crop.square",
+                                                   description: Text("Channels you created, administer or moderate show here."))
+                        case .all:
+                            ContentUnavailableView("No Channels", systemImage: "music.note.house")
+                        }
                     }
                 }
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            Picker("Channels", selection: $list) {
+                Text("Popular").tag(RvrbAPI.ChannelList.popular)
+                Text("Following").tag(RvrbAPI.ChannelList.followed)
+                Text("Mine").tag(RvrbAPI.ChannelList.mine)
+                Text("All").tag(RvrbAPI.ChannelList.all)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+        }
         .navigationTitle("Channels")
         .searchable(text: $query, prompt: "Search channels")
-        .task(id: query) {
+        .task(id: "\(list.rawValue)|\(query)") {
             if !query.isEmpty {
                 try? await Task.sleep(for: .milliseconds(350))
                 if Task.isCancelled { return }
@@ -77,13 +103,19 @@ struct ChannelListView: View {
 
     private func load(reset: Bool) async {
         let search = query
+        let list = list
         let next = reset ? 0 : page + 1
         isLoading = true
         defer { isLoading = false }
 
         do {
-            let result = try await client.api.channels(search: search, page: next)
-            guard search == query else { return }
+            let source: RvrbAPI.ChannelList = list == .popular && !search.isEmpty ? .all : list
+            let result = try await client.api.channels(source, search: search, page: next)
+            guard search == query, list == self.list else { return }
+            if list == .followed && search.isEmpty {
+                // Keep the room's Follow toggle in step with the list.
+                if reset && !result.more { client.replaceFollowed(Set(result.channels.map(\.id))) }
+            }
 
             if reset {
                 channels = result.channels
@@ -105,6 +137,7 @@ struct ChannelListView: View {
 private struct ChannelRow: View {
     let channel: Channel
     let isJoined: Bool
+    let isFollowed: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -112,6 +145,12 @@ private struct ChannelRow: View {
                 Text(channel.title)
                     .font(.headline)
                     .lineLimit(1)
+                if isFollowed {
+                    Image(systemName: "heart.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.pink)
+                        .accessibilityLabel("Followed")
+                }
                 if isJoined {
                     Image(systemName: "speaker.wave.2.fill")
                         .font(.caption)

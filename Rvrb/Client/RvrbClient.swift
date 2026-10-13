@@ -41,6 +41,8 @@ final class RvrbClient {
     private static let defaultBotIds: Set<String> = ["bot", "0"]
     /// Joined on the current connection: `join` was answered since the socket last connected.
     private(set) var isInRoom = false
+    /// Ids of the channels the user follows.
+    private(set) var followedChannelIds: Set<String> = []
     /// A failed join, to show as an alert (the chat isn't on screen then).
     var joinError: String?
 
@@ -90,6 +92,36 @@ final class RvrbClient {
         #endif
         socket.start()
         Task { await loadQueue() }
+        Task { await loadFollowed() }
+    }
+
+    func loadFollowed() async {
+        do {
+            followedChannelIds = try await api.followedChannelIds()
+        } catch {
+            Log.app.error("Could not load followed channels: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// The full followed list, loaded by the channel list.
+    func replaceFollowed(_ ids: Set<String>) {
+        followedChannelIds = ids
+    }
+
+    func isFollowing(_ channel: Channel) -> Bool {
+        followedChannelIds.contains(channel.id)
+    }
+
+    func setFollowing(_ follow: Bool, _ channel: Channel) async {
+        // Show it right away; put it back if the server refuses.
+        if follow { followedChannelIds.insert(channel.id) } else { followedChannelIds.remove(channel.id) }
+
+        do {
+            try await api.setFollowing(follow, channelId: channel.id)
+        } catch {
+            if follow { followedChannelIds.remove(channel.id) } else { followedChannelIds.insert(channel.id) }
+            addNotice("Could not \(follow ? "follow" : "unfollow") \(channel.title): \(error.localizedDescription)")
+        }
     }
 
     /// Stops playback and leaves the channel (send `leave` on exit: without it the account stays in the channel).

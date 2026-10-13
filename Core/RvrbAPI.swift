@@ -32,13 +32,41 @@ final class RvrbAPI {
         try await get("api/login")
     }
 
-    /// `GET /api/channels/{query}/{page}`, 16 per page. Without search text: the popular channels (public, at least
-    /// one user, most users first); with it, all channels matching slug, genre or title.
-    func channels(search: String, page: Int) async throws -> (channels: [Channel], more: Bool) {
+    /// The channel lists of `GET /api/channels/{list}/{page}`.
+    enum ChannelList: String, CaseIterable, Identifiable {
+        /// Public channels with at least one user.
+        case popular
+        /// Channels the user follows.
+        case followed
+        /// Channels the user created, administers or moderates.
+        case mine = "my"
+        case all
+
+        var id: String { rawValue }
+    }
+
+    /// `GET /api/channels/{list}/{page}`, 16 per page, most users first; `search` matches slug, genre and title.
+    func channels(_ list: ChannelList = .popular, search: String = "", page: Int) async throws -> (channels: [Channel], more: Bool) {
         let search = search.trimmingCharacters(in: .whitespaces)
-        let path = search.isEmpty ? "api/channels/popular/\(page)" : "api/channels/all/\(page)?query=\(Self.escape(search))"
-        let result = try await get(path)
+        let query = search.isEmpty ? "" : "?query=\(Self.escape(search))"
+        let result = try await get("api/channels/\(list.rawValue)/\(page)\(query)")
         return ((result["channels"]?.array ?? []).compactMap(Channel.init), result["more"]?.bool ?? false)
+    }
+
+    /// The ids of every channel the user follows.
+    func followedChannelIds() async throws -> Set<String> {
+        var ids = Set<String>()
+        for page in 0..<10 {
+            let result = try await channels(.followed, page: page)
+            ids.formUnion(result.channels.map(\.id))
+            if !result.more { break }
+        }
+        return ids
+    }
+
+    /// `PUT` / `DELETE /api/channel/{id}/followers/me`.
+    func setFollowing(_ follow: Bool, channelId: String) async throws {
+        _ = try await send(follow ? "PUT" : "DELETE", "api/channel/\(Self.escape(channelId))/followers/me")
     }
 
     /// `GET /api/channel/{id}/bot`: the channel's own bot (name and pictures); empty when it has none. Only for
