@@ -198,6 +198,10 @@ struct RoomView: View {
                                      set: { client.liveActivity.isEnabled = $0 })) {
                     Label("Live Activity", systemImage: "platter.filled.top.iphone")
                 }
+                Toggle(isOn: Binding(get: { client.keepAlive.isEnabled },
+                                     set: { client.keepAlive.isEnabled = $0 })) {
+                    Label("Stay Connected in Background", systemImage: "antenna.radiowaves.left.and.right")
+                }
                 #endif
 
                 Button("Resync Playback", systemImage: "arrow.triangle.2.circlepath") {

@@ -58,6 +58,7 @@ final class RvrbClient {
     #if os(iOS)
     @ObservationIgnored private(set) var liveActivity: LiveActivityController!
     @ObservationIgnored private let backgroundGrace = BackgroundGrace(name: "Keep the RVRB connection")
+    @ObservationIgnored let keepAlive = BackgroundKeepAlive()
     #endif
 
     init(api: RvrbAPI, session: Session, me: Me, chatMaxLength: Int) {
@@ -263,6 +264,9 @@ final class RvrbClient {
     }
 
     private func clearChannel() {
+        #if os(iOS)
+        keepAlive.stop()
+        #endif
         channel = nil
         isInRoom = false
         users = []
@@ -356,9 +360,12 @@ final class RvrbClient {
         #if os(iOS)
         if hidden {
             backgroundGrace.begin()
+            // In a channel: keep running (and connected) until the user comes back.
+            if channel != nil { keepAlive.start() }
             scheduleBackgroundRefresh()
         } else {
             backgroundGrace.end()
+            keepAlive.stop()
             BackgroundRefresh.cancel()
             socket.reconnectIfNeeded()
         }
@@ -402,7 +409,12 @@ final class RvrbClient {
 
     private func sendAppState() {
         guard socket.isReady else { return }
+        #if os(iOS)
+        // Kept running in the background, the app is as good as visible: keep the server's heartbeats coming.
+        let hidden = isHidden && !keepAlive.isRunning
+        #else
         let hidden = isHidden
+        #endif
         Task { try? await socket.notify("appState", ["hidden": .bool(hidden), "mobile": true]) }
     }
 
