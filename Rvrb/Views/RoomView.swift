@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// The joined channel: now playing with votes, the chat, and the message box. People are in an inspector; the
+/// The joined channel: now playing with votes, the chat, and the message box. People are in an inspector (a
+/// sheet on iPhone, presented through the one `sheet(item:)`: two presenters on one view fight each other); the
 /// queue, track search and Spotify device in sheets.
 struct RoomView: View {
     let client: RvrbClient
@@ -11,9 +12,21 @@ struct RoomView: View {
     @State private var showsPeople = false
     #endif
     @State private var sheet: Sheet?
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
+
+    /// iPad and Mac show people beside the chat; iPhone in a sheet.
+    private var peopleInSheet: Bool {
+        #if os(iOS)
+        sizeClass == .compact
+        #else
+        false
+        #endif
+    }
 
     enum Sheet: String, Identifiable {
-        case queue, search, devices
+        case queue, search, devices, people
         var id: String { rawValue }
     }
 
@@ -41,7 +54,7 @@ struct RoomView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar { toolbar }
-        .inspector(isPresented: $showsPeople) {
+        .inspector(isPresented: peopleInSheet ? .constant(false) : $showsPeople) {
             PeopleView(client: client)
                 .inspectorColumnWidth(min: 200, ideal: 240, max: 340)
         }
@@ -50,6 +63,7 @@ struct RoomView: View {
             case .queue: QueueView(client: client)
             case .search: SearchSheet(client: client)
             case .devices: DevicesView(client: client)
+            case .people: PeopleSheet(client: client)
             }
         }
     }
@@ -74,7 +88,11 @@ struct RoomView: View {
             .help("Your DJ queue")
 
             Button {
-                showsPeople.toggle()
+                if peopleInSheet {
+                    sheet = .people
+                } else {
+                    showsPeople.toggle()
+                }
             } label: {
                 Label("People", systemImage: "person.2")
             }
@@ -160,5 +178,26 @@ private struct SearchSheet: View {
         #if os(macOS)
         .frame(minWidth: 480, minHeight: 560)
         #endif
+    }
+}
+
+private struct PeopleSheet: View {
+    let client: RvrbClient
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            PeopleView(client: client)
+                .navigationTitle("People")
+                #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+                #endif
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
+                }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
