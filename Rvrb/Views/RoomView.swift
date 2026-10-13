@@ -89,6 +89,13 @@ struct RoomView: View {
                     Label("Play on Spotify", systemImage: "play.circle")
                 }
 
+                #if os(iOS)
+                Toggle(isOn: Binding(get: { client.liveActivity.isEnabled },
+                                     set: { client.liveActivity.isEnabled = $0 })) {
+                    Label("Live Activity", systemImage: "platter.filled.top.iphone")
+                }
+                #endif
+
                 Button("Resync Playback", systemImage: "arrow.triangle.2.circlepath") {
                     Task { await client.player.resync() }
                 }

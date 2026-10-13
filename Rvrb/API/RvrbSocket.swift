@@ -35,6 +35,8 @@ final class RvrbSocket {
 
     /// `ready` arrived: (re)join the channel now.
     @ObservationIgnored var onReady: () -> Void = {}
+    /// The connection dropped; the server forgets the channel until it's joined again.
+    @ObservationIgnored var onDisconnect: () -> Void = {}
     /// A server notification: its method and params.
     @ObservationIgnored var onNotification: (String, JSON?) -> Void = { _, _ in }
     /// Answers server requests (`nextChannelTrack`); throw to answer with an error.
@@ -170,6 +172,7 @@ final class RvrbSocket {
 
             self.task = nil
             failPending("Disconnected")
+            onDisconnect()
 
             if Task.isCancelled { return }
 

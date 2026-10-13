@@ -5,6 +5,9 @@ import WebKit
 /// Login state: checks the saved token at launch and creates the client once it's valid.
 @Observable
 final class AppModel {
+    /// One per process: a Live Activity vote can launch the app in the background, before any scene exists.
+    static let shared = AppModel()
+
     enum Phase {
         case loggedOut
         case checking
@@ -21,9 +24,35 @@ final class AppModel {
         if case .ready(let client) = phase { client } else { nil }
     }
 
+    @ObservationIgnored private var started = false
+
+    /// Checks the saved token once per launch (from the first scene, or from a Live Activity vote).
     func start() async {
+        guard !started else { return }
+        started = true
         if session.token != nil { await validate() }
     }
+
+    #if os(iOS)
+    /// A vote button on the Live Activity; this may be the first thing to run after a background launch.
+    func voteFromLiveActivity(_ vote: String, channelId: String, channelTitle: String) async throws {
+        await start()
+
+        // A launch that's still checking the token: wait for it.
+        while case .checking = phase {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+
+        guard let client else { throw RvrbError.unauthorized("Open Rvrb to log in") }
+
+        let kind: VoteKind = switch vote {
+        case "dope": .dope
+        case "nope": .nope
+        default: .star
+        }
+        try await client.voteFromOutside(kind, channelId: channelId, channelTitle: channelTitle)
+    }
+    #endif
 
     func logIn(token: String) async {
         session.update(token)

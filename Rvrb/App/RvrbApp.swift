@@ -6,7 +6,15 @@ struct RvrbApp: App {
     @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
     #endif
 
-    @State private var model = AppModel()
+    @State private var model = AppModel.shared
+
+    init() {
+        #if os(iOS)
+        LiveActivityBridge.vote = { vote, channelId, channelTitle in
+            try await AppModel.shared.voteFromLiveActivity(vote, channelId: channelId, channelTitle: channelTitle)
+        }
+        #endif
+    }
 
     var body: some Scene {
         WindowGroup {

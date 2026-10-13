@@ -27,6 +27,8 @@ final class RvrbClient {
     /// DJ ids in play order: the first is playing.
     private(set) var djIds: [String] = []
     private(set) var nowPlaying: NowPlaying?
+    /// Joined on the current connection: `join` was answered since the socket last connected.
+    private(set) var isInRoom = false
     /// A failed join, to show as an alert (the chat isn't on screen then).
     var joinError: String?
 
@@ -39,6 +41,9 @@ final class RvrbClient {
     /// "@name" mentions to highlight: the display name and the username.
     @ObservationIgnored private let mentions: [String]
     @ObservationIgnored private var isHidden = false
+    #if os(iOS)
+    @ObservationIgnored private(set) var liveActivity: LiveActivityController!
+    #endif
 
     init(api: RvrbAPI, session: Session, me: Me, chatMaxLength: Int) {
         self.api = api
@@ -52,6 +57,7 @@ final class RvrbClient {
             .map { "@" + $0 }
 
         socket.onReady = { [weak self] in self?.socketReady() }
+        socket.onDisconnect = { [weak self] in self?.isInRoom = false }
         socket.onNotification = { [weak self] method, params in self?.handle(method, params) }
         socket.requestHandler = { [weak self] method, params in
             guard let self else { throw RvrbError.server("Gone") }
@@ -60,9 +66,15 @@ final class RvrbClient {
         player.onError = { [weak self] message in
             self?.addNotice("Playback: \(message). Pick a Spotify device, or turn playback off.")
         }
+        #if os(iOS)
+        liveActivity = LiveActivityController(client: self)
+        #endif
     }
 
     func start() {
+        #if os(iOS)
+        liveActivity.start()
+        #endif
         socket.start()
         Task { await loadQueue() }
     }
@@ -109,6 +121,7 @@ final class RvrbClient {
         // be handled before the code after the await runs.
         let previous = self.channel
         self.channel = nil
+        isInRoom = false
         users = []
         names = [:]
         djIds = channel.djIds
@@ -132,6 +145,7 @@ final class RvrbClient {
         guard joining?.id == channel.id else { return }
         joining = nil
         self.channel = channel
+        isInRoom = true
 
         if let greeting = channel.greeting {
             addNotice(ChatText.parse(.string(greeting)).plain)
@@ -152,6 +166,7 @@ final class RvrbClient {
 
     private func clearChannel() {
         channel = nil
+        isInRoom = false
         users = []
         names = [:]
         djIds = []
@@ -182,6 +197,7 @@ final class RvrbClient {
             Task {
                 do {
                     try await socket.request("join", ["channelId": .string(channel.id)])
+                    isInRoom = true
                     await loadBacklog(channelId: channel.id)
                 } catch {
                     addNotice("Could not rejoin \(channel.title): \(Self.describeJoinError(error))")
@@ -477,6 +493,30 @@ final class RvrbClient {
         } catch {
             addNotice("Vote not counted: \(error.localizedDescription)")
         }
+    }
+
+    /// A vote from the Live Activity, which may have woken the app in the background: reconnect, (re)join the
+    /// activity's channel if needed, wait for the room's state, then vote.
+    func voteFromOutside(_ kind: VoteKind, channelId: String, channelTitle: String) async throws {
+        socket.reconnectIfNeeded()
+
+        if channel?.id != channelId, joining?.id != channelId,
+           let target = Channel(["_id": .string(channelId), "title": .string(channelTitle)]) {
+            Task { await join(target) }
+        }
+
+        let deadline = Date.now.addingTimeInterval(15)
+        var waited = false
+        while !(isInRoom && channel?.id == channelId && nowPlaying != nil) {
+            guard Date.now < deadline else { throw RvrbError.server("Couldn't reach RVRB to vote") }
+            waited = true
+            try await Task.sleep(for: .milliseconds(150))
+        }
+
+        // Just (re)joined: the server's playChannelTrack with the current votes follows the join's answer.
+        if waited { try await Task.sleep(for: .milliseconds(400)) }
+
+        await vote(kind)
     }
 
     private func bookmark(_ uri: String, title: String) async {
