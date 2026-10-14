@@ -4,7 +4,7 @@
 <dict>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.com.marijn.Rvrb</string>
+		<string>group.is.bes.Rvrb</string>
 	</array>
 </dict>
 </plist>

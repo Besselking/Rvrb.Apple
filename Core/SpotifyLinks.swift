@@ -108,7 +108,7 @@ extension RvrbAPI {
 
 /// A Darwin notification from the share extension to the app: the queue changed, reload it.
 nonisolated enum QueueChangeNotification {
-    static let name = "com.marijn.Rvrb.queueChanged"
+    static let name = "is.bes.Rvrb.queueChanged"
 
     static func post() {
         CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),

@@ -9,7 +9,7 @@ import os
 /// gives about 30 seconds.
 enum BackgroundRefresh {
     /// Also listed under BGTaskSchedulerPermittedIdentifiers in Config/Rvrb-iOS-Info.plist.
-    static let identifier = "com.marijn.Rvrb.refresh"
+    static let identifier = "is.bes.Rvrb.refresh"
 
     static func schedule(after date: Date?) {
         let request = BGAppRefreshTaskRequest(identifier: identifier)

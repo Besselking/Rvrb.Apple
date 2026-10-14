@@ -59,7 +59,7 @@ final class Session {
 /// keychain access group, so the share extension can read it; without that entitlement, in the app's own group.
 private enum Keychain {
     #if os(iOS)
-    static let sharedGroup = "group.com.marijn.Rvrb"
+    static let sharedGroup = "group.is.bes.Rvrb"
     #endif
 
     private static let query: [String: Any] = [
