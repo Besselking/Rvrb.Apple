@@ -10,6 +10,9 @@ struct ChatView: View {
 
     var body: some View {
         let messages = client.messages
+        // Replies name the answered message by its syncTime.
+        let bySyncTime = Dictionary(messages.compactMap { message in message.syncTime.map { ($0, message) } },
+                                    uniquingKeysWith: { first, _ in first })
 
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
@@ -21,8 +24,24 @@ struct ChatView: View {
                                avatarURL: client.avatarURL(for: userId, fallback: message.avatarURL),
                                activity: client.activity(of: userId),
                                isBot: message.kind == .bot || client.isBot(userId),
-                               onSelectUser: client.hasProfile(userId) ? { onSelectUser(userId) } : nil)
+                               onSelectUser: client.hasProfile(userId) ? { onSelectUser(userId) } : nil,
+                               repliedTo: message.replyTo.flatMap { bySyncTime[$0] },
+                               onShowOriginal: { original in
+                                   withAnimation { position.scrollTo(id: original.id, anchor: .center) }
+                               })
                         .id(message.id)
+                        .contextMenu {
+                            if message.canReply && client.channel != nil {
+                                Button("Reply", systemImage: "arrowshape.turn.up.left") {
+                                    client.replyingTo = message
+                                }
+                            }
+                            if !message.body.plain.isEmpty {
+                                Button("Copy", systemImage: "doc.on.doc") {
+                                    copyToPasteboard(message.body.plain)
+                                }
+                            }
+                        }
                 }
             }
             .padding(.vertical, 8)
@@ -42,12 +61,21 @@ struct ChatView: View {
         }
     }
 
-    /// Consecutive messages from one person within a few minutes share a header.
+    /// Consecutive messages from one person within a few minutes share a header; a reply starts its own.
     private func showsHeader(_ messages: [ChatMessage], at index: Int) -> Bool {
         guard index > 0 else { return true }
         let message = messages[index], previous = messages[index - 1]
         return previous.userId != message.userId || previous.kind != message.kind
-            || message.time.timeIntervalSince(previous.time) > 300
+            || message.time.timeIntervalSince(previous.time) > 300 || message.replyTo != nil
+    }
+
+    private func copyToPasteboard(_ text: String) {
+        #if os(iOS)
+        UIPasteboard.general.string = text
+        #else
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        #endif
     }
 }
 
@@ -59,6 +87,9 @@ struct MessageRow: View {
     var isBot = false
     /// Tapping the avatar or name shows the sender's profile.
     var onSelectUser: (() -> Void)? = nil
+    /// The message this one answers, when it's still loaded.
+    var repliedTo: ChatMessage? = nil
+    var onShowOriginal: (ChatMessage) -> Void = { _ in }
 
     var body: some View {
         switch message.kind {
@@ -116,9 +147,17 @@ struct MessageRow: View {
                         }
                     }
 
+                    if message.replyTo != nil {
+                        ReplyQuote(original: repliedTo)
+                            .onTapGesture { if let repliedTo { onShowOriginal(repliedTo) } }
+                    }
+
                     if !message.body.plain.isEmpty {
                         Text(message.body.text)
+                            #if os(macOS)
+                            // On iPhone a long press opens the Reply/Copy menu instead.
                             .textSelection(.enabled)
+                            #endif
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
@@ -159,5 +198,35 @@ private struct ChatImageView: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .frame(maxWidth: 260, minHeight: Self.height, maxHeight: Self.height, alignment: .leading)
+    }
+}
+
+/// The answered message, quoted above a reply: who wrote it and how it started.
+struct ReplyQuote: View {
+    let original: ChatMessage?
+    var lineLimit = 2
+
+    var body: some View {
+        HStack(spacing: 6) {
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(.tint)
+                .frame(width: 3)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Label(original?.name ?? "An earlier message", systemImage: "arrowshape.turn.up.left.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(original.map { Avatar.color(for: $0.userId ?? $0.name) } ?? .secondary)
+                if let original {
+                    Text(original.body.plain.isEmpty ? "Image" : original.body.plain)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(lineLimit)
+                }
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(original.map { "Reply to \($0.name): \($0.body.plain)" } ?? "Reply to an earlier message")
     }
 }

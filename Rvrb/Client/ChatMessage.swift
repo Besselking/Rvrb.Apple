@@ -23,6 +23,15 @@ struct ChatMessage: Identifiable {
     let mentionsMe: Bool
     /// The sender's picture as the message carries it, for senders no longer in the channel.
     var avatarURL: URL? = nil
+    /// The server's time for it (epoch ms): with the channel, what names a message. nil for this app's notices.
+    var syncTime: Double? = nil
+    /// The `syncTime` of the message this one answers.
+    var replyTo: Double? = nil
+
+    /// Messages people wrote can be answered (as in the web app).
+    var canReply: Bool {
+        syncTime != nil && [.chat, .whisper, .bot].contains(kind)
+    }
 }
 
 /// What a user is doing, shown on their avatar.

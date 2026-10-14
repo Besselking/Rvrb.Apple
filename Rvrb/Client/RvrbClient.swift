@@ -43,6 +43,8 @@ final class RvrbClient {
     private(set) var isInRoom = false
     /// Ids of the channels the user follows.
     private(set) var followedChannelIds: Set<String> = []
+    /// The message the next one sent answers.
+    var replyingTo: ChatMessage?
     /// A failed join, to show as an alert (the chat isn't on screen then).
     var joinError: String?
 
@@ -226,6 +228,7 @@ final class RvrbClient {
         nowPlaying = nil
         messages = []
         seen = []
+        replyingTo = nil
 
         do {
             if previous != nil {
@@ -264,6 +267,7 @@ final class RvrbClient {
     }
 
     private func clearChannel() {
+        replyingTo = nil
         #if os(iOS)
         keepAlive.stop()
         #endif
@@ -430,9 +434,15 @@ final class RvrbClient {
             return false
         }
 
+        var params: [String: JSON] = ["payload": .string(text), "type": "chat"]
+        // A reply names the answered message by its syncTime (a number, as the web app sends it).
+        let reply = replyingTo
+        if let syncTime = reply?.syncTime { params["replyTo"] = .number(syncTime) }
+
         do {
             // The server never answers pushMessage, so it goes without an id.
-            try await socket.notify("pushMessage", ["payload": .string(text), "type": "chat"])
+            try await socket.notify("pushMessage", .object(params))
+            if replyingTo?.id == reply?.id { replyingTo = nil }
             return true
         } catch {
             addNotice("Not sent: \(error.localizedDescription)")
@@ -491,11 +501,13 @@ final class RvrbClient {
         }
 
         let isMine = userId == me.id
-        let mentionsMe = !isMine && (kind == .whisper || mentions.contains { body.plain.localizedCaseInsensitiveContains($0) })
+        let replyTo = m["replyTo"]?.double
+        let answersMe = replyTo.map { syncTime in messages.contains { $0.syncTime == syncTime && $0.isMine } } ?? false
+        let mentionsMe = !isMine && (kind == .whisper || answersMe || mentions.contains { body.plain.localizedCaseInsensitiveContains($0) })
 
         let message = ChatMessage(id: key, time: Date(timeIntervalSince1970: syncTime / 1000), userId: userId, name: name,
                                   kind: kind, body: body, isMine: isMine, mentionsMe: mentionsMe,
-                                  avatarURL: RvrbAPI.imageURL(m["image"]))
+                                  avatarURL: RvrbAPI.imageURL(m["image"]), syncTime: syncTime, replyTo: replyTo)
 
         // The backlog loaded on join doesn't call for attention, only live messages do.
         if live && mentionsMe { requestAttention() }

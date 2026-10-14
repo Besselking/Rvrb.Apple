@@ -11,8 +11,38 @@ struct ComposerView: View {
     }
 
     var body: some View {
+        VStack(spacing: 0) {
+            if let reply = client.replyingTo {
+                HStack(spacing: 10) {
+                    ReplyQuote(original: reply, lineLimit: 1)
+                    Spacer(minLength: 0)
+                    Button {
+                        client.replyingTo = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Cancel Reply")
+                }
+                .padding(.horizontal)
+                .padding(.top, 8)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
+            field
+        }
+        .animation(.snappy(duration: 0.2), value: client.replyingTo?.id)
+        .onChange(of: client.replyingTo?.id) { _, id in
+            if id != nil { isFocused = true }
+        }
+    }
+
+    private var field: some View {
         HStack(spacing: 8) {
-            TextField(client.channel == nil ? "Join a channel to chat" : "Message", text: $text)
+            TextField(client.channel == nil ? "Join a channel to chat" : (client.replyingTo == nil ? "Message" : "Reply"),
+                      text: $text)
                 .textFieldStyle(.plain)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -20,6 +50,11 @@ struct ComposerView: View {
                 .focused($isFocused)
                 .submitLabel(.send)
                 .onSubmit(send)
+                .onKeyPress(.escape) {
+                    guard client.replyingTo != nil else { return .ignored }
+                    client.replyingTo = nil
+                    return .handled
+                }
                 .disabled(client.channel == nil)
 
             #if os(iOS)
