@@ -22,8 +22,9 @@ struct NowPlayingLiveActivity: Widget {
             let state = context.state
 
             return DynamicIsland {
+                // The expanded island is only so tall: two lines of text and small buttons.
                 DynamicIslandExpandedRegion(.leading) {
-                    ArtworkView(data: state.artwork, size: 56)
+                    ArtworkView(data: state.artwork, size: 46)
                         .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
@@ -33,12 +34,12 @@ struct NowPlayingLiveActivity: Widget {
                         .padding(.trailing, 4)
                 }
                 DynamicIslandExpandedRegion(.center) {
-                    TrackText(context: context)
+                    TrackText(context: context, compact: true)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(spacing: 8) {
+                    VStack(spacing: 6) {
                         TrackProgress(state: state)
-                        VoteButtons(context: context)
+                        VoteButtons(context: context, compact: true)
                     }
                     .padding(.horizontal, 4)
                 }
@@ -79,6 +80,8 @@ private struct LockScreenView: View {
 
 private struct TrackText: View {
     let context: ActivityViewContext<RvrbActivityAttributes>
+    /// Track and artist only (the Dynamic Island); stale shows in place of the artist.
+    var compact = false
 
     var body: some View {
         let state = context.state
@@ -87,24 +90,32 @@ private struct TrackText: View {
             Text(state.track)
                 .font(.headline)
                 .lineLimit(1)
-            Text(state.artists)
+            Text(compact && context.isStale ? "Open Rvrb to catch up" : state.artists)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-            Group {
-                if context.isStale {
-                    Text("Open Rvrb to catch up")
-                } else if let dj = state.dj {
-                    Text("\(dj) · \(context.attributes.channelTitle)")
-                } else {
-                    Text(context.attributes.channelTitle)
-                }
+            if !compact {
+                detail
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var detail: some View {
+        let state = context.state
+
+        return Group {
+            if context.isStale {
+                Text("Open Rvrb to catch up")
+            } else if let dj = state.dj {
+                Text("\(dj) · \(context.attributes.channelTitle)")
+            } else {
+                Text(context.attributes.channelTitle)
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
     }
 }
 
@@ -135,6 +146,8 @@ private struct TrackProgress: View {
 
 private struct VoteButtons: View {
     let context: ActivityViewContext<RvrbActivityAttributes>
+    /// Small buttons for the Dynamic Island.
+    var compact = false
 
     var body: some View {
         let state = context.state
@@ -154,18 +167,20 @@ private struct VoteButtons: View {
             Image(systemName: isOn ? icon + ".fill" : icon)
                 .foregroundStyle(isOn ? tint : .secondary)
         }
-        .font(.subheadline)
+        .font(compact ? .caption : .subheadline)
         .frame(maxWidth: .infinity)
 
         if context.state.isMyTrack {
             // Voting on your own track fails: show the counts only.
-            label.padding(.vertical, 6)
+            label.padding(.vertical, compact ? 2 : 6)
         } else {
             Button(intent: VoteIntent(vote: vote, channelId: context.attributes.channelId,
                                       channelTitle: context.attributes.channelTitle)) {
                 label
             }
             .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .controlSize(compact ? .small : .regular)
             .tint(isOn ? tint : .gray)
         }
     }
