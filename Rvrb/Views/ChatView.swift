@@ -29,6 +29,9 @@ struct ChatView: View {
                                onShowOriginal: { original in
                                    withAnimation { position.scrollTo(id: original.id, anchor: .center) }
                                })
+                        .modifier(SwipeToReply(isEnabled: message.canReply && client.channel != nil) {
+                            client.replyingTo = message
+                        })
                         .id(message.id)
                         .contextMenu {
                             if message.canReply && client.channel != nil {
@@ -230,3 +233,80 @@ struct ReplyQuote: View {
         .accessibilityLabel(original.map { "Reply to \($0.name): \($0.body.plain)" } ?? "Reply to an earlier message")
     }
 }
+
+/// Swipe a message to the right to answer it, as in Messages (iPhone). The row follows the finger, a reply arrow
+/// appears behind it, and letting go past the threshold starts the reply.
+private struct SwipeToReply: ViewModifier {
+    let isEnabled: Bool
+    let action: () -> Void
+
+    @State private var offset: CGFloat = 0
+    private let threshold: CGFloat = 60
+
+    func body(content: Content) -> some View {
+        #if os(iOS)
+        if isEnabled {
+            content
+                .offset(x: offset)
+                .background(alignment: .leading) {
+                    Image(systemName: "arrowshape.turn.up.left.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.tint)
+                        .opacity(Double(min(offset / threshold, 1)))
+                        .scaleEffect(offset >= threshold ? 1.1 : 0.8)
+                        .animation(.snappy(duration: 0.15), value: offset >= threshold)
+                        .padding(.leading, 14)
+                }
+                .gesture(HorizontalSwipe { distance in
+                    // Follows the finger up to the threshold, then resists.
+                    let x = max(0, distance)
+                    offset = x <= threshold ? x : threshold + (x - threshold) * 0.25
+                } onEnded: { _ in
+                    if offset >= threshold { action() }
+                    withAnimation(.snappy(duration: 0.25)) { offset = 0 }
+                })
+                .sensoryFeedback(.impact(weight: .medium), trigger: offset >= threshold) { old, new in new && !old }
+        } else {
+            content
+        }
+        #else
+        content
+        #endif
+    }
+}
+
+#if os(iOS)
+/// A pan that only starts on a rightward, mostly horizontal swipe, so the chat still scrolls (and the edge swipe
+/// still goes back) as before.
+private struct HorizontalSwipe: UIGestureRecognizerRepresentable {
+    let onChanged: (CGFloat) -> Void
+    let onEnded: (CGFloat) -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let pan = UIPanGestureRecognizer()
+        pan.delegate = context.coordinator
+        return pan
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        let distance = recognizer.translation(in: recognizer.view).x
+        switch recognizer.state {
+        case .changed: onChanged(distance)
+        case .ended, .cancelled, .failed: onEnded(distance)
+        default: break
+        }
+    }
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
+            let velocity = pan.velocity(in: pan.view)
+            return velocity.x > 0 && abs(velocity.x) > abs(velocity.y) * 1.5
+        }
+    }
+}
+#endif

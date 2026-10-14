@@ -35,7 +35,12 @@ struct ComposerView: View {
         }
         .animation(.snappy(duration: 0.2), value: client.replyingTo?.id)
         .onChange(of: client.replyingTo?.id) { _, id in
-            if id != nil { isFocused = true }
+            guard id != nil else { return }
+            // Picked from a message's menu: focus once the menu has gone, or the keyboard can fail to come up.
+            Task {
+                try? await Task.sleep(for: .milliseconds(350))
+                isFocused = true
+            }
         }
     }
 
