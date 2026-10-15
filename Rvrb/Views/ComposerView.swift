@@ -5,7 +5,7 @@ struct ComposerView: View {
 
     @State private var text = ""
     @FocusState private var isFocused: Bool
-    /// The highlighted command suggestion.
+    /// The highlighted suggestion.
     @State private var selectedSuggestion = 0
     /// Escape hid the suggestions for this text.
     @State private var suggestionsHiddenFor: String?
@@ -14,20 +14,52 @@ struct ComposerView: View {
         client.channel != nil && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// The commands matching what's typed, while a `/` or `!` command is being typed.
-    private var suggestions: (prefix: Character, commands: [BotCommand])? {
-        guard suggestionsHiddenFor != text, let query = CommandCompletion.query(in: text) else { return nil }
-        let matches = CommandCompletion.matches(query.partial, in: client.botCommands)
-        return matches.isEmpty ? nil : (query.prefix, matches)
+    private enum Suggestions {
+        case commands(prefix: Character, [BotCommand])
+        case people([ChannelUser])
+
+        var count: Int {
+            switch self {
+            case .commands(_, let commands): commands.count
+            case .people(let users): users.count
+            }
+        }
+    }
+
+    /// Commands while a `/` or `!` command is being typed, people while an `@` name is.
+    private var suggestions: Suggestions? {
+        guard suggestionsHiddenFor != text else { return nil }
+
+        if let query = CommandCompletion.query(in: text) {
+            let matches = CommandCompletion.matches(query.partial, in: client.botCommands)
+            return matches.isEmpty ? nil : .commands(prefix: query.prefix, matches)
+        }
+        if let query = MentionCompletion.query(in: text) {
+            let matches = MentionCompletion.matches(query.partial, in: client.users, excluding: client.me.id)
+            return matches.isEmpty ? nil : .people(matches)
+        }
+        return nil
+    }
+
+    private func selectedIndex(_ suggestions: Suggestions) -> Int {
+        min(selectedSuggestion, suggestions.count - 1)
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            if let suggestions {
-                CommandSuggestions(prefix: suggestions.prefix, commands: suggestions.commands,
-                                   selected: min(selectedSuggestion, suggestions.commands.count - 1),
-                                   onPick: complete)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            switch suggestions {
+            case .commands(let prefix, let commands):
+                SuggestionList(items: commands, selected: min(selectedSuggestion, commands.count - 1), onPick: complete) {
+                    CommandRow(prefix: prefix, command: $0)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            case .people(let users):
+                SuggestionList(items: users, selected: min(selectedSuggestion, users.count - 1), onPick: mention) {
+                    MentionRow(user: $0, avatarURL: client.avatarURL(for: $0.id))
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            case nil:
+                EmptyView()
             }
 
             if let reply = client.replyingTo {
@@ -85,7 +117,7 @@ struct ComposerView: View {
                 }
                 .onKeyPress(.tab) {
                     guard let suggestions else { return .ignored }
-                    complete(suggestions.commands[min(selectedSuggestion, suggestions.commands.count - 1)])
+                    pick(suggestions)
                     return .handled
                 }
                 .onKeyPress(.upArrow) { moveSuggestion(by: -1) }
@@ -132,19 +164,42 @@ struct ComposerView: View {
         isFocused = true
     }
 
+    /// Replaces the partial `@name` with the person's display name, as the web app does.
+    private func mention(_ user: ChannelUser) {
+        guard let query = MentionCompletion.query(in: text) else { return }
+        text = String(text[..<query.at]) + "@\(user.name) "
+        isFocused = true
+    }
+
+    private func pick(_ suggestions: Suggestions) {
+        switch suggestions {
+        case .commands(_, let commands): complete(commands[selectedIndex(suggestions)])
+        case .people(let users): mention(users[selectedIndex(suggestions)])
+        }
+    }
+
     private func moveSuggestion(by step: Int) -> KeyPress.Result {
         guard let suggestions else { return .ignored }
-        let count = suggestions.commands.count
-        selectedSuggestion = (min(selectedSuggestion, count - 1) + step + count) % count
+        let count = suggestions.count
+        selectedSuggestion = (selectedIndex(suggestions) + step + count) % count
         return .handled
     }
 
     private func send() {
-        // Return first picks the highlighted command (as in the web app), unless it's already typed in full.
-        if let suggestions, let query = CommandCompletion.query(in: text) {
-            let command = suggestions.commands[min(selectedSuggestion, suggestions.commands.count - 1)]
-            if command.name.lowercased() != query.partial.lowercased() {
-                complete(command)
+        // Return first picks the highlighted suggestion (as in the web app), unless it's already typed in full.
+        if let suggestions {
+            let typed: String?
+            let picked: String
+            switch suggestions {
+            case .commands(_, let commands):
+                typed = CommandCompletion.query(in: text)?.partial
+                picked = commands[selectedIndex(suggestions)].name
+            case .people(let users):
+                typed = MentionCompletion.query(in: text)?.partial
+                picked = users[selectedIndex(suggestions)].name
+            }
+            if typed?.lowercased() != picked.lowercased() {
+                pick(suggestions)
                 return
             }
         }
