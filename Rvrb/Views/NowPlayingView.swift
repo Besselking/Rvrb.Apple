@@ -5,20 +5,30 @@ struct NowPlayingView: View {
     let client: RvrbClient
     var onSelectUser: (String) -> Void = { _ in }
 
+    @Environment(\.openURL) private var openURL
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let playing = client.nowPlaying {
                 HStack(alignment: .top, spacing: 12) {
                     Artwork(url: playing.track.artworkURL(minWidth: 160), size: 76)
+                        .onTapGesture { openInSpotify(playing.track) }
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityLabel("Open \(playing.track.name) in Spotify")
 
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(playing.track.name)
-                            .font(.headline)
-                            .lineLimit(1)
-                        Text(playing.track.artists)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                        // The track and artist open it in Spotify.
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(playing.track.name)
+                                .font(.headline)
+                                .lineLimit(1)
+                            Text(playing.track.artists)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture { openInSpotify(playing.track) }
                         if let dj = client.djIds.first {
                             Label(dj == client.me.id ? "You're playing this" : client.name(for: dj), systemImage: "music.mic")
                                 .font(.caption)
@@ -33,6 +43,7 @@ struct NowPlayingView: View {
                     }
                 }
                 .frame(height: 76)
+                .contextMenu { trackMenu(playing.track) }
 
                 VoteBar(client: client, votes: playing.votes)
             } else {
@@ -46,6 +57,38 @@ struct NowPlayingView: View {
             }
         }
         .padding()
+    }
+
+    @ViewBuilder
+    private func trackMenu(_ track: Track) -> some View {
+        Button("Open in Spotify", systemImage: "arrow.up.right.square") { openInSpotify(track) }
+        Button("Add to Queue", systemImage: "text.badge.plus") {
+            Task { await client.addToQueue([.track(id: track.id)]) }
+        }
+        if let link = SpotifyItem.track(id: track.id).link {
+            Button("Copy Link", systemImage: "link") { copy(link.absoluteString) }
+        }
+    }
+
+    /// The Spotify app when it's there (its `spotify:` URI), otherwise the track's page on open.spotify.com.
+    private func openInSpotify(_ track: Track) {
+        let web = SpotifyItem.track(id: track.id).link
+        guard let uri = track.uri.flatMap(URL.init(string:)) else {
+            if let web { openURL(web) }
+            return
+        }
+        openURL(uri) { opened in
+            if !opened, let web { openURL(web) }
+        }
+    }
+
+    private func copy(_ text: String) {
+        #if os(iOS)
+        UIPasteboard.general.string = text
+        #else
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        #endif
     }
 
     private func progress(_ playing: NowPlaying) -> some View {
