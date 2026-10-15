@@ -187,6 +187,11 @@ final class RvrbClient {
         return .listening
     }
 
+    /// Whether the user starred (bookmarked) the playing track.
+    func hasStarred(_ userId: String) -> Bool {
+        voters[userId]?.star == true
+    }
+
     /// The user's picture for what they're doing (their DJ, dope or nope image), falling back to their avatar.
     func avatarURL(for userId: String, fallback: URL? = nil) -> URL? {
         let user = user(userId)

@@ -23,6 +23,7 @@ struct ChatView: View {
                                showsHeader: showsHeader(messages, at: index),
                                avatarURL: client.avatarURL(for: userId, fallback: message.avatarURL),
                                activity: client.activity(of: userId),
+                               starred: client.hasStarred(userId),
                                isBot: message.kind == .bot || client.isBot(userId),
                                onSelectUser: client.hasProfile(userId) ? { onSelectUser(userId) } : nil,
                                repliedTo: message.replyTo.flatMap { bySyncTime[$0] },
@@ -87,6 +88,7 @@ struct MessageRow: View {
     let showsHeader: Bool
     let avatarURL: URL?
     var activity: UserActivity = .listening
+    var starred = false
     var isBot = false
     /// Tapping the avatar or name shows the sender's profile.
     var onSelectUser: (() -> Void)? = nil
@@ -123,7 +125,8 @@ struct MessageRow: View {
         case .chat, .whisper, .bot:
             HStack(alignment: .top, spacing: 10) {
                 if showsHeader {
-                    Avatar(name: message.name, url: avatarURL, seed: message.userId ?? message.name, activity: activity)
+                    Avatar(name: message.name, url: avatarURL, seed: message.userId ?? message.name, activity: activity,
+                           starred: starred)
                         .onTapGesture { onSelectUser?() }
                 } else {
                     Color.clear.frame(width: Avatar.size, height: 1)

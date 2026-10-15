@@ -103,7 +103,7 @@ struct UserProfileView: View {
     private var header: some View {
         VStack(spacing: 10) {
             Avatar(name: name, url: client.avatarURL(for: userId, fallback: RvrbAPI.imageURL(profile?["image"])),
-                   seed: userId, activity: client.activity(of: userId), size: 96)
+                   seed: userId, activity: client.activity(of: userId), starred: client.hasStarred(userId), size: 96)
 
             VStack(spacing: 4) {
                 HStack(spacing: 6) {

@@ -55,12 +55,28 @@ struct Avatar: View {
     let url: URL?
     let seed: String
     var activity: UserActivity = .listening
+    /// Starred (bookmarked) the playing track: a star at the top, besides any other badge.
+    var starred = false
     var size: CGFloat = Avatar.size
 
     var body: some View {
         picture
             .overlay(alignment: .bottomTrailing) { badge }
+            .overlay(alignment: .topTrailing) { starBadge }
             .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private var starBadge: some View {
+        if starred {
+            Image(systemName: "star.fill")
+                .font(.system(size: size * 0.26, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: size * 0.44, height: size * 0.44)
+                .background(.yellow, in: Circle())
+                .overlay(Circle().stroke(.background, lineWidth: 1.5))
+                .offset(x: size * 0.08, y: -size * 0.08)
+        }
     }
 
     /// The state badge, for users without their own DJ/dope/nope pictures (and to make it obvious for those with).

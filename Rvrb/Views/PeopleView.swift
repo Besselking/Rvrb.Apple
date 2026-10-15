@@ -17,7 +17,7 @@ struct PeopleView: View {
                 ForEach(Array(client.djIds.enumerated()), id: \.element) { index, id in
                     Button { onSelect(id) } label: {
                         PersonRow(name: client.name(for: id), url: client.avatarURL(for: id), seed: id,
-                                  activity: client.activity(of: id), isBot: client.isBot(id),
+                                  activity: client.activity(of: id), starred: client.hasStarred(id), isBot: client.isBot(id),
                                   detail: index == 0 ? "Playing" : "#\(index + 1)", isMe: id == client.me.id)
                     }
                     .buttonStyle(.plain)
@@ -37,7 +37,8 @@ struct PeopleView: View {
                 ForEach(client.listeners) { user in
                     Button { onSelect(user.id) } label: {
                         PersonRow(name: user.name, url: client.avatarURL(for: user.id), seed: user.id,
-                                  activity: client.activity(of: user.id), isBot: user.isBot, detail: nil,
+                                  activity: client.activity(of: user.id), starred: client.hasStarred(user.id),
+                                  isBot: user.isBot, detail: nil,
                                   isMe: user.id == client.me.id)
                     }
                     .buttonStyle(.plain)
@@ -55,13 +56,14 @@ private struct PersonRow: View {
     let url: URL?
     let seed: String
     let activity: UserActivity
+    let starred: Bool
     let isBot: Bool
     let detail: String?
     let isMe: Bool
 
     var body: some View {
         HStack(spacing: 10) {
-            Avatar(name: name, url: url, seed: seed, activity: activity, size: 34)
+            Avatar(name: name, url: url, seed: seed, activity: activity, starred: starred, size: 34)
             Text(name)
                 .fontWeight(isMe ? .semibold : .regular)
                 .lineLimit(1)
