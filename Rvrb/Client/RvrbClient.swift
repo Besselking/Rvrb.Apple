@@ -60,7 +60,6 @@ final class RvrbClient {
     #if os(iOS)
     @ObservationIgnored private(set) var liveActivity: LiveActivityController!
     @ObservationIgnored private let backgroundGrace = BackgroundGrace(name: "Keep the RVRB connection")
-    @ObservationIgnored let keepAlive = BackgroundKeepAlive()
     #endif
 
     init(api: RvrbAPI, session: Session, me: Me, chatMaxLength: Int) {
@@ -268,9 +267,6 @@ final class RvrbClient {
 
     private func clearChannel() {
         replyingTo = nil
-        #if os(iOS)
-        keepAlive.stop()
-        #endif
         channel = nil
         isInRoom = false
         users = []
@@ -355,7 +351,9 @@ final class RvrbClient {
     // MARK: App state (iOS)
 
     /// A hidden mobile client gets no heartbeats and is kept for an hour after its socket closes. For a mobile
-    /// client with Spotify the server starts playback itself (`playChannelTrack` then has `playTrack: false`).
+    /// client with Spotify the server starts playback itself (`playChannelTrack` then has `playTrack: false`), and
+    /// (per the RVRB developers) serves a DJ's next track server-side while the client sleeps, so the app needn't
+    /// stay awake for its turns.
     ///
     /// Going to the background also asks iOS for a little more time, so a quick switch (say to Spotify) keeps the
     /// connection; after that the app is suspended until it comes back or a Live Activity vote wakes it.
@@ -364,12 +362,9 @@ final class RvrbClient {
         #if os(iOS)
         if hidden {
             backgroundGrace.begin()
-            // In a channel: keep running (and connected) until the user comes back.
-            if channel != nil { keepAlive.start() }
             scheduleBackgroundRefresh()
         } else {
             backgroundGrace.end()
-            keepAlive.stop()
             BackgroundRefresh.cancel()
             socket.reconnectIfNeeded()
         }
@@ -413,12 +408,7 @@ final class RvrbClient {
 
     private func sendAppState() {
         guard socket.isReady else { return }
-        #if os(iOS)
-        // Kept running in the background, the app is as good as visible: keep the server's heartbeats coming.
-        let hidden = isHidden && !keepAlive.isRunning
-        #else
         let hidden = isHidden
-        #endif
         Task { try? await socket.notify("appState", ["hidden": .bool(hidden), "mobile": true]) }
     }
 
