@@ -118,6 +118,20 @@ struct ChannelUser: Identifiable, Hashable {
     }
 }
 
+/// A chat command (typed as `/name` or `!name`), from the channel's bot options.
+struct BotCommand: Identifiable, Hashable {
+    let name: String
+    let help: String?
+
+    var id: String { name }
+
+    init?(_ json: JSON) {
+        guard let name = json["name"]?.nonEmptyString else { return nil }
+        self.name = name
+        help = json["help"]?.nonEmptyString
+    }
+}
+
 /// A Spotify Connect device (`GET /api/music/devices`).
 struct Device: Identifiable, Hashable {
     let id: String

@@ -5,13 +5,31 @@ struct ComposerView: View {
 
     @State private var text = ""
     @FocusState private var isFocused: Bool
+    /// The highlighted command suggestion.
+    @State private var selectedSuggestion = 0
+    /// Escape hid the suggestions for this text.
+    @State private var suggestionsHiddenFor: String?
 
     private var canSend: Bool {
         client.channel != nil && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// The commands matching what's typed, while a `/` or `!` command is being typed.
+    private var suggestions: (prefix: Character, commands: [BotCommand])? {
+        guard suggestionsHiddenFor != text, let query = CommandCompletion.query(in: text) else { return nil }
+        let matches = CommandCompletion.matches(query.partial, in: client.botCommands)
+        return matches.isEmpty ? nil : (query.prefix, matches)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
+            if let suggestions {
+                CommandSuggestions(prefix: suggestions.prefix, commands: suggestions.commands,
+                                   selected: min(selectedSuggestion, suggestions.commands.count - 1),
+                                   onPick: complete)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             if let reply = client.replyingTo {
                 HStack(spacing: 10) {
                     ReplyQuote(original: reply, lineLimit: 1)
@@ -34,6 +52,7 @@ struct ComposerView: View {
             field
         }
         .animation(.snappy(duration: 0.2), value: client.replyingTo?.id)
+        .animation(.snappy(duration: 0.15), value: suggestions == nil)
         .onChange(of: client.replyingTo?.id) { _, id in
             guard id != nil else { return }
             // Picked from a message's menu: focus once the menu has gone, or the keyboard can fail to come up.
@@ -56,10 +75,21 @@ struct ComposerView: View {
                 .submitLabel(.send)
                 .onSubmit(send)
                 .onKeyPress(.escape) {
+                    if suggestions != nil {
+                        suggestionsHiddenFor = text
+                        return .handled
+                    }
                     guard client.replyingTo != nil else { return .ignored }
                     client.replyingTo = nil
                     return .handled
                 }
+                .onKeyPress(.tab) {
+                    guard let suggestions else { return .ignored }
+                    complete(suggestions.commands[min(selectedSuggestion, suggestions.commands.count - 1)])
+                    return .handled
+                }
+                .onKeyPress(.upArrow) { moveSuggestion(by: -1) }
+                .onKeyPress(.downArrow) { moveSuggestion(by: 1) }
                 .disabled(client.channel == nil)
 
             #if os(iOS)
@@ -91,10 +121,34 @@ struct ComposerView: View {
             if new.count > client.chatMaxLength {
                 text = String(new.prefix(client.chatMaxLength))
             }
+            selectedSuggestion = 0
         }
     }
 
+    /// Replaces the partial command with the picked one, ready for its arguments.
+    private func complete(_ command: BotCommand) {
+        guard let query = CommandCompletion.query(in: text) else { return }
+        text = "\(String(query.prefix))\(command.name) "
+        isFocused = true
+    }
+
+    private func moveSuggestion(by step: Int) -> KeyPress.Result {
+        guard let suggestions else { return .ignored }
+        let count = suggestions.commands.count
+        selectedSuggestion = (min(selectedSuggestion, count - 1) + step + count) % count
+        return .handled
+    }
+
     private func send() {
+        // Return first picks the highlighted command (as in the web app), unless it's already typed in full.
+        if let suggestions, let query = CommandCompletion.query(in: text) {
+            let command = suggestions.commands[min(selectedSuggestion, suggestions.commands.count - 1)]
+            if command.name.lowercased() != query.partial.lowercased() {
+                complete(command)
+                return
+            }
+        }
+
         guard canSend else { return }
         let message = text
         text = ""

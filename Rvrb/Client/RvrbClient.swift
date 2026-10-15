@@ -36,6 +36,9 @@ final class RvrbClient {
     private var usersById: [String: ChannelUser] = [:]
     /// The channel's own bot, which chats (and can DJ) as the user id "bot" or as its record's ids.
     private(set) var channelBot: ChannelUser?
+    /// The chat commands the channel offers, for completion in the message box.
+    private(set) var botCommands: [BotCommand] = []
+    @ObservationIgnored private var channelBotConfig: JSON?
     private var channelBotIds = RvrbClient.defaultBotIds
     /// The channel's bot chats as "bot" or as the number 0 (seen on the live server).
     private static let defaultBotIds: Set<String> = ["bot", "0"]
@@ -227,6 +230,8 @@ final class RvrbClient {
         usersById = [:]
         voters = [:]
         channelBot = nil
+        channelBotConfig = nil
+        botCommands = []
         channelBotIds = RvrbClient.defaultBotIds
         djIds = channel.djIds
         nowPlaying = nil
@@ -279,6 +284,8 @@ final class RvrbClient {
         usersById = [:]
         voters = [:]
         channelBot = nil
+        channelBotConfig = nil
+        botCommands = []
         channelBotIds = RvrbClient.defaultBotIds
         djIds = []
         nowPlaying = nil
@@ -321,9 +328,11 @@ final class RvrbClient {
     private func setChannelBot(_ bot: JSON) {
         guard bot.object?.isEmpty == false else {
             channelBot = nil
+            channelBotConfig = nil
             channelBotIds = RvrbClient.defaultBotIds
             return
         }
+        channelBotConfig = bot
         channelBotIds = Self.defaultBotIds.union([bot["id"]?.string, bot["_id"]?.string].compactMap { $0 })
         channelBot = ChannelUser(bot, id: "bot")
     }
@@ -335,6 +344,24 @@ final class RvrbClient {
             setChannelBot(bot)
         } catch {
             Log.app.error("Could not load the channel's bot: \(error.localizedDescription, privacy: .public)")
+        }
+        await loadBotCommands(channelId: channelId)
+    }
+
+    /// As the web app: the options for the bot's enabled state and personality, leaving out commands the
+    /// channel has switched off (a command with options shows only when its `Enabled` option is on).
+    private func loadBotCommands(channelId: String) async {
+        let config = channelBotConfig
+        do {
+            let commands = try await api.botCommands(channelId: channelId, enabled: config?["enabled"]?.bool ?? false,
+                                                     personality: config?["personality"]?.nonEmptyString)
+            guard channel?.id == channelId else { return }
+            botCommands = commands.compactMap(BotCommand.init).filter { command in
+                guard let options = config?["commands"]?[command.name]?["options"], options != .null else { return true }
+                return options["Enabled"]?["value"]?.isOn ?? false
+            }
+        } catch {
+            Log.app.error("Could not load the chat commands: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -504,8 +531,9 @@ final class RvrbClient {
 
         case "updateChannel":
             // After an edit it carries the channel's bot.
-            if let bot = p?["bot"], bot.object?.isEmpty == false {
+            if let bot = p?["bot"], bot.object?.isEmpty == false, let channel {
                 setChannelBot(bot)
+                Task { await loadBotCommands(channelId: channel.id) }
             }
 
         case "updateChannelUsers":

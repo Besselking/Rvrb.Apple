@@ -113,6 +113,14 @@ final class RvrbAPI {
         try await get("api/channel/\(Self.escape(channelId))/bot")
     }
 
+    /// `GET /api/channel/{id}/bot/options`: the chat commands (`name`, `help`), core ones plus the channel bot's
+    /// when it's enabled. `enabled` and `personality` come from the bot record, as the web app passes them.
+    func botCommands(channelId: String, enabled: Bool, personality: String?) async throws -> [JSON] {
+        var path = "api/channel/\(Self.escape(channelId))/bot/options?enabled=\(enabled)"
+        if let personality { path += "&personality=\(Self.escape(personality))" }
+        return try await get(path)["commands"]?.array ?? []
+    }
+
     /// `GET /api/channel/{id}/chat`: the last 100 messages; only works once joined over the websocket.
     func chat(channelId: String) async throws -> [JSON] {
         try await get("api/channel/\(Self.escape(channelId))/chat")["chat"]?.array ?? []
