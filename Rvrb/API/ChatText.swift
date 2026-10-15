@@ -35,6 +35,15 @@ enum ChatText {
             }
         }
 
+        // An image is shown as the image: a link to it (or its bare address) would only repeat it.
+        let imageAddresses = Set(images.compactMap { if case .url(let url) = $0 { url.absoluteString } else { nil } })
+        func isImageLink(_ address: String) -> Bool {
+            guard !images.isEmpty else { return false }
+            if imageAddresses.contains(address) { return true }
+            let ext = URL(string: address)?.pathExtension.lowercased() ?? ""
+            return ["gif", "png", "jpg", "jpeg", "webp"].contains(ext)
+        }
+
         var text = imageTag.replace(html, with: "")
         text = lineBreak.replace(text, with: "\n")
 
@@ -47,14 +56,23 @@ enum ChatText {
             guard let range = Range(match.range, in: text) else { continue }
             withPlaceholders += text[cursor..<range.lowerBound]
             let href = match.group(1, in: text).map(decodeEntities)
-            let label = decodeEntities(tag.replace(match.group(2, in: text) ?? "", with: ""))
+            let label = decodeEntities(tag.replace(match.group(2, in: text) ?? "", with: "")).trimmingCharacters(in: .whitespaces)
+            cursor = range.upperBound
+
+            // A link to the image that's shown, labelled with its own address: leave it out.
+            if let href, isImageLink(href), label.isEmpty || label == href || label.hasPrefix("http") {
+                continue
+            }
+
             links.append((label.isEmpty ? href ?? "" : label, href.flatMap(URL.init(string:))))
             withPlaceholders += "\u{E000}\(links.count - 1)\u{E001}"
-            cursor = range.upperBound
         }
         withPlaceholders += text[cursor...]
 
         text = decodeEntities(tag.replace(withPlaceholders, with: ""))
+        for address in imageAddresses {
+            text = text.replacingOccurrences(of: address, with: "")
+        }
         text = blankLines.replace(text, with: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Rebuild with the links in place, detecting bare URLs in the rest.
