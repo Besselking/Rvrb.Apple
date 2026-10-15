@@ -38,11 +38,15 @@ struct TrackRow: View {
                     .lineLimit(1)
                 HStack(spacing: 6) {
                     if isFirstPlay {
-                        Label("First", systemImage: "sparkles")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.tint)
-                            .labelStyle(.titleAndIcon)
-                            .help("Never played on RVRB: playing it is a first play")
+                        // An HStack, not a Label: a label's icon and title sit too far apart at this size.
+                        HStack(spacing: 2) {
+                            Image(systemName: "sparkles")
+                            Text("First")
+                        }
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.tint)
+                        .help("Never played on RVRB: playing it is a first play")
+                        .accessibilityElement(children: .combine)
                     }
                     Text(track.artists)
                         .font(.caption)
