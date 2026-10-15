@@ -49,6 +49,9 @@ struct ChatView: View {
                 }
             }
             .padding(.vertical, 8)
+            #if os(iOS)
+            .background(ScrollsToTopDisabled())
+            #endif
         }
         .scrollPosition($position)
         .defaultScrollAnchor(.bottom)
@@ -310,6 +313,29 @@ private struct HorizontalSwipe: UIGestureRecognizerRepresentable {
             guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
             let velocity = pan.velocity(in: pan.view)
             return velocity.x < 0 && abs(velocity.x) > abs(velocity.y) * 1.5
+        }
+    }
+}
+#endif
+
+#if os(iOS)
+/// Turns off iOS's tap-the-top-to-scroll-up for the enclosing scroll view: a tap that just misses the channel's
+/// name would otherwise send the chat back to its oldest message. SwiftUI has no modifier for it.
+private struct ScrollsToTopDisabled: UIViewRepresentable {
+    func makeUIView(context: Context) -> Finder { Finder() }
+    func updateUIView(_ view: Finder, context: Context) {}
+
+    final class Finder: UIView {
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            var view = superview
+            while let current = view {
+                if let scrollView = current as? UIScrollView {
+                    scrollView.scrollsToTop = false
+                    return
+                }
+                view = current.superview
+            }
         }
     }
 }
