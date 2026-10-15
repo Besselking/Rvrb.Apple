@@ -2,26 +2,15 @@
 import ActivityKit
 import Foundation
 
-/// The Live Activity for the channel's playing track (Lock Screen, Notification Center, Dynamic Island).
-/// Shared by the app, which starts and updates it, and the widget extension, which draws it.
+/// The Live Activity for the joined channel (Lock Screen, Notification Center, Dynamic Island): its name and vote
+/// buttons. It shows nothing about the playing track: the app sleeps in the background (RVRB carries on
+/// server-side), so track details and vote counts would go stale. Shared by the app, which starts it, and the
+/// widget extension, which draws it.
 nonisolated struct RvrbActivityAttributes: ActivityAttributes {
     nonisolated struct ContentState: Codable, Hashable {
-        var track: String
-        var artists: String
-        var dj: String?
-        /// The track's start and end on the local clock; the progress runs from these without updates.
-        var start: Date
-        var end: Date
-        var dope: Int
-        var nope: Int
-        var star: Int
-        var myDope: Bool
-        var myNope: Bool
-        var myStar: Bool
-        /// The user is playing this track (voting on it would fail).
-        var isMyTrack: Bool
-        /// A small JPEG: widgets can't load images from the network, and the state must stay under 4 KB.
-        var artwork: Data?
+        /// What a vote from the activity did ("Doped", "Already starred", …); shown until the content goes stale
+        /// a few seconds later.
+        var confirmation: String?
     }
 
     var channelId: String

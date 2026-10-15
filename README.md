@@ -39,14 +39,15 @@ would disconnect your other clients too.
 | `Rvrb/Client/` | `RvrbClient` (room state, votes, DJ turns), `TrackQueue` (the DJ queue stack), `Player` (`playTrack`/`pauseTrack`), background and Live Activity support |
 | `Rvrb/Views/` | SwiftUI: channel list, room (now playing, chat, composer), people inspector, queue, search, devices |
 | `RvrbShare/` | Share extension: share Spotify tracks or playlists to Rvrb to add them to your DJ queue |
-| `RvrbWidgets/` | The now-playing Live Activity (iOS) |
+| `RvrbWidgets/` | The channel's Live Activity with vote buttons (iOS) |
 | `Shared/` | Live Activity attributes and the vote intent, shared by the app and the widget extension |
 | `Scripts/logo.swift` | Draws the app icon and logo into the asset catalog |
 
 ## Untested so far
 
 - iOS sends `appState { hidden, mobile: true }` on backgrounding, per the spec: the server should then keep the
-  connection for an hour and start Spotify playback itself (`playTrack: false`). Not tried against the server yet.
+  connection for an hour, start Spotify playback itself (`playTrack: false`) and, per RVRB's developers, serve a
+  DJ's next track server-side while the app sleeps. Not tried for long periods yet.
 - Password-protected channels, whispers, skipping, and the other items in the
   [API notes'](https://github.com/Besselking/Rvrb.TUI/blob/main/docs/rvrb-api-notes.md) "Not explored" list.
 

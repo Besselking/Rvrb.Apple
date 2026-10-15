@@ -5,17 +5,15 @@ import Observation
 import os
 import UIKit
 
-/// Mirrors the joined channel's playing track into a Live Activity. RVRB sends no pushes for it, so it's only
-/// updated while the app runs; once the app is suspended the progress still runs to the end of the track, after
-/// which the activity is stale until the app is opened (or a vote button wakes it).
+/// Keeps a Live Activity for the joined channel: started when joining (with the app in the foreground), ended
+/// on leaving. It holds no track details, so it needs no updates while the app sleeps; a vote from it briefly
+/// shows what it did.
 final class LiveActivityController {
     private typealias State = RvrbActivityAttributes.ContentState
 
     private unowned let client: RvrbClient
     /// The running activity, by id: `Activity` isn't Sendable, so it's looked up again where it's used.
     private var activityId: String?
-    private var lastState: State?
-    private var artwork: (url: URL, data: Data?)?
     private var syncing = false
     private var needsSync = false
 
@@ -47,16 +45,22 @@ final class LiveActivityController {
         observe()
     }
 
+    /// Shows what a vote from the activity did, for a few seconds.
+    func confirm(_ text: String) {
+        guard let activityId else { return }
+        let content = ActivityContent(state: State(confirmation: text), staleDate: .now.addingTimeInterval(8))
+        Task { await Self.update(id: activityId, content) }
+    }
+
     private func observe() {
         withObservationTracking {
-            _ = (client.channel, client.nowPlaying?.track.id, client.nowPlaying?.votes, client.djIds, client.users)
+            _ = client.channel
         } onChange: { [weak self] in
             Task { @MainActor in self?.observe() }
         }
         sync()
     }
 
-    /// Coalesces bursts of changes (joining sends the track, DJs and users at once).
     private func sync() {
         needsSync = true
         guard !syncing else { return }
@@ -72,42 +76,26 @@ final class LiveActivityController {
     }
 
     private func apply() async {
-        guard isEnabled, let channel = client.channel, let playing = client.nowPlaying else {
+        guard isEnabled, let channel = client.channel else {
             await end()
             return
         }
 
-        let track = playing.track
-        let dj = client.djIds.first.map { client.name(for: $0) }
-        let state = State(track: track.name, artists: track.artists, dj: dj,
-                          start: playing.start, end: playing.end,
-                          dope: playing.votes.dope, nope: playing.votes.nope, star: playing.votes.star,
-                          myDope: playing.votes.mine.dope, myNope: playing.votes.mine.nope, myStar: playing.votes.mine.star,
-                          isMyTrack: client.isMyTurn,
-                          artwork: await thumbnail(track.artworkURL(minWidth: 64)))
-
-        // Stale a little after the track ends, unless an update for the next track arrives first.
-        let content = ActivityContent(state: state, staleDate: playing.end.addingTimeInterval(5))
-
         if let activityId, let activity = Self.activity(activityId),
            activity.attributes.channelId == channel.id, activity.activityState == .active {
-            guard state != lastState else { return }
-            await Self.update(id: activityId, content)
-            lastState = state
             return
         }
 
         await end()
 
-        // Starting needs the app in the foreground; updates don't.
+        // Starting needs the app in the foreground.
         guard ActivityAuthorizationInfo().areActivitiesEnabled,
               UIApplication.shared.applicationState != .background else { return }
 
         do {
             activityId = try Activity.request(
                 attributes: RvrbActivityAttributes(channelId: channel.id, channelTitle: channel.title),
-                content: content).id
-            lastState = state
+                content: ActivityContent(state: State(confirmation: nil), staleDate: nil)).id
         } catch {
             Log.app.error("Could not start the Live Activity: \(error.localizedDescription, privacy: .public)")
         }
@@ -116,7 +104,6 @@ final class LiveActivityController {
     private func end() async {
         guard let activityId else { return }
         self.activityId = nil
-        lastState = nil
         await Self.end(id: activityId)
     }
 
@@ -130,28 +117,6 @@ final class LiveActivityController {
 
     private nonisolated static func end(id: String) async {
         await Activity<RvrbActivityAttributes>.activities.first { $0.id == id }?.end(nil, dismissalPolicy: .immediate)
-    }
-
-    /// A small JPEG of the album art. The whole state must stay under 4 KB, so it shrinks until it fits.
-    private func thumbnail(_ url: URL?) async -> Data? {
-        guard let url else { return nil }
-        if let artwork, artwork.url == url { return artwork.data }
-
-        var result: Data?
-        if let (data, _) = try? await URLSession.shared.data(from: url), let image = UIImage(data: data) {
-            search: for side in [120.0, 96, 72, 56] {
-                guard let small = await image.byPreparingThumbnail(ofSize: CGSize(width: side, height: side)) else { continue }
-                for quality in [0.7, 0.5, 0.35] {
-                    if let jpeg = small.jpegData(compressionQuality: quality), jpeg.count <= 2400 {
-                        result = jpeg
-                        break search
-                    }
-                }
-            }
-        }
-
-        artwork = (url, result)
-        return result
     }
 }
 #endif

@@ -64,19 +64,6 @@ final class AppModel {
     }
     #endif
 
-    #if os(iOS)
-    /// Background App Refresh; may be the first thing to run after a background launch.
-    func refreshInBackground() async {
-        await start()
-        while case .checking = phase {
-            guard (try? await Task.sleep(for: .milliseconds(100))) != nil else { return }
-        }
-
-        guard let client else { return }
-        await client.refreshInBackground()
-        client.scheduleBackgroundRefresh()
-    }
-    #endif
 
     func logIn(token: String) async {
         session.update(token)

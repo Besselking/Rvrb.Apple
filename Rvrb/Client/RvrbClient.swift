@@ -362,10 +362,8 @@ final class RvrbClient {
         #if os(iOS)
         if hidden {
             backgroundGrace.begin()
-            scheduleBackgroundRefresh()
         } else {
             backgroundGrace.end()
-            BackgroundRefresh.cancel()
             socket.reconnectIfNeeded()
         }
         sendAppState()
@@ -375,32 +373,6 @@ final class RvrbClient {
     #if os(iOS)
     private static var launchedInBackground: Bool {
         UIApplication.shared.applicationState == .background
-    }
-
-    /// While in a channel, ask to be woken when the playing track ends (when the Live Activity goes stale).
-    func scheduleBackgroundRefresh() {
-        guard channel != nil || liveActivity.channel != nil else { return }
-        BackgroundRefresh.schedule(after: nowPlaying?.end.addingTimeInterval(2))
-    }
-
-    /// A background wake: reconnect, rejoin the channel (the Live Activity's one if the app was relaunched),
-    /// and wait for the server's state so the Live Activity updates; then iOS suspends the app again.
-    func refreshInBackground() async {
-        guard let target = channel ?? joining ?? liveActivity.channel else { return }
-
-        socket.reconnectIfNeeded()
-        if channel?.id != target.id, joining?.id != target.id {
-            Task { await join(target) }
-        }
-
-        let deadline = Date.now.addingTimeInterval(20)
-        while !(isInRoom && channel?.id == target.id) {
-            guard Date.now < deadline, !Task.isCancelled else { return }
-            try? await Task.sleep(for: .milliseconds(200))
-        }
-
-        // The track, DJs and users follow the join's answer; give them and the Live Activity update a moment.
-        try? await Task.sleep(for: .seconds(2))
     }
     #else
     private static let launchedInBackground = false
@@ -706,7 +678,7 @@ final class RvrbClient {
 
         let deadline = Date.now.addingTimeInterval(15)
         var waited = false
-        while !(isInRoom && channel?.id == channelId && nowPlaying != nil) {
+        while !(isInRoom && channel?.id == channelId) {
             guard Date.now < deadline else { throw RvrbError.server("Couldn't reach RVRB to vote") }
             waited = true
             try await Task.sleep(for: .milliseconds(150))
@@ -715,7 +687,35 @@ final class RvrbClient {
         // Just (re)joined: the server's playChannelTrack with the current votes follows the join's answer.
         if waited { try await Task.sleep(for: .milliseconds(400)) }
 
+        let result = await addVote(kind)
+        #if os(iOS)
+        liveActivity.confirm(result)
+        #endif
+    }
+
+    /// A vote from outside the app (the Live Activity), where the user can't see the current votes: it only ever
+    /// adds one (switching between dope and nope), never takes one back. Returns what it did.
+    private func addVote(_ kind: VoteKind) async -> String {
+        guard let playing = nowPlaying else { return "Nothing is playing" }
+        guard !isMyTurn else { return "You're playing this one" }
+
+        let mine = playing.votes.mine
+        let (already, done) = switch kind {
+        case .dope: (mine.dope, "Doped")
+        case .nope: (mine.nope, "Noped")
+        case .star: (mine.star, "Starred")
+        }
+        guard !already else { return "Already \(done.lowercased())" }
+
         await vote(kind)
+
+        let now = nowPlaying?.votes.mine
+        let counted = switch kind {
+        case .dope: now?.dope == true
+        case .nope: now?.nope == true
+        case .star: now?.star == true
+        }
+        return counted ? done : "Vote not counted"
     }
 
     private func bookmark(_ uri: String, title: String) async {

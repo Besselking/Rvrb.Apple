@@ -6,202 +6,125 @@ import WidgetKit
 @main
 struct RvrbWidgetsBundle: WidgetBundle {
     var body: some Widget {
-        NowPlayingLiveActivity()
+        ChannelLiveActivity()
     }
 }
 
 private let accent = Color(red: 0.553, green: 0.361, blue: 0.902)
 
-struct NowPlayingLiveActivity: Widget {
+/// The joined channel with Dope, Nope and Star buttons that vote on whatever is playing. No track details or
+/// counts: they'd be stale while the app sleeps.
+struct ChannelLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: RvrbActivityAttributes.self) { context in
-            LockScreenView(context: context)
-                .padding()
-                .activitySystemActionForegroundColor(accent)
+            VStack(spacing: 12) {
+                ChannelHeader(context: context)
+                VoteButtons(context: context)
+            }
+            .padding()
+            .activitySystemActionForegroundColor(accent)
         } dynamicIsland: { context in
-            let state = context.state
-
-            return DynamicIsland {
-                // The expanded island is only so tall: two lines of text and small buttons.
+            DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    ArtworkView(data: state.artwork, size: 46)
+                    Logo(size: 40)
                         .padding(.leading, 4)
                 }
-                DynamicIslandExpandedRegion(.trailing) {
-                    Label(context.attributes.channelTitle, systemImage: "waveform")
-                        .labelStyle(.iconOnly)
-                        .foregroundStyle(accent)
-                        .padding(.trailing, 4)
-                }
                 DynamicIslandExpandedRegion(.center) {
-                    TrackText(context: context, compact: true)
+                    ChannelText(context: context)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(spacing: 6) {
-                        TrackProgress(state: state)
-                        VoteButtons(context: context, compact: true)
-                    }
-                    .padding(.horizontal, 4)
+                    VoteButtons(context: context, compact: true)
+                        .padding(.horizontal, 4)
                 }
             } compactLeading: {
-                ArtworkView(data: state.artwork, size: 24)
+                Logo(size: 22)
             } compactTrailing: {
-                ProgressView(timerInterval: state.start...max(state.end, state.start), countsDown: false) {
-                    EmptyView()
-                } currentValueLabel: {
-                    EmptyView()
-                }
-                .progressViewStyle(.circular)
-                .tint(accent)
-                .frame(width: 22, height: 22)
+                Image(systemName: context.isStale || context.state.confirmation == nil ? "waveform" : "checkmark")
+                    .foregroundStyle(accent)
             } minimal: {
-                ArtworkView(data: state.artwork, size: 24)
+                Logo(size: 22)
             }
             .keylineTint(accent)
         }
     }
 }
 
-private struct LockScreenView: View {
+private struct ChannelHeader: View {
     let context: ActivityViewContext<RvrbActivityAttributes>
 
     var body: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 12) {
-                ArtworkView(data: context.state.artwork, size: 60)
-                TrackText(context: context)
-                Spacer(minLength: 0)
-            }
-            TrackProgress(state: context.state)
-            VoteButtons(context: context)
+        HStack(spacing: 12) {
+            Logo(size: 44)
+            ChannelText(context: context)
+            Spacer(minLength: 0)
         }
     }
 }
 
-private struct TrackText: View {
+private struct ChannelText: View {
     let context: ActivityViewContext<RvrbActivityAttributes>
-    /// Track and artist only (the Dynamic Island); stale shows in place of the artist.
-    var compact = false
 
     var body: some View {
-        let state = context.state
-
         VStack(alignment: .leading, spacing: 2) {
-            Text(state.track)
+            Text(context.attributes.channelTitle)
                 .font(.headline)
                 .lineLimit(1)
-            Text(compact && context.isStale ? "Open Rvrb to catch up" : state.artists)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            if !compact {
-                detail
+            Group {
+                if let confirmation = context.state.confirmation, !context.isStale {
+                    Label(confirmation, systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(accent)
+                } else {
+                    Text("Vote on what's playing")
+                        .foregroundStyle(.secondary)
+                }
             }
+            .font(.subheadline)
+            .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-
-    private var detail: some View {
-        let state = context.state
-
-        return Group {
-            if context.isStale {
-                Text("Open Rvrb to catch up")
-            } else if let dj = state.dj {
-                Text("\(dj) · \(context.attributes.channelTitle)")
-            } else {
-                Text(context.attributes.channelTitle)
-            }
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .lineLimit(1)
-    }
 }
 
-private struct TrackProgress: View {
-    let state: RvrbActivityAttributes.ContentState
-
-    var body: some View {
-        let range = state.start...max(state.end, state.start)
-
-        HStack(spacing: 8) {
-            Text(timerInterval: range, countsDown: false)
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(width: 40, alignment: .leading)
-            ProgressView(timerInterval: range, countsDown: false) {
-                EmptyView()
-            } currentValueLabel: {
-                EmptyView()
-            }
-            .tint(accent)
-            Text(timerInterval: range, countsDown: true)
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(width: 44, alignment: .trailing)
-        }
-    }
-}
-
+/// Each button adds that vote to the playing track (switching between dope and nope); it never takes one back.
 private struct VoteButtons: View {
     let context: ActivityViewContext<RvrbActivityAttributes>
-    /// Small buttons for the Dynamic Island.
     var compact = false
 
     var body: some View {
-        let state = context.state
-
         HStack(spacing: 8) {
-            button("dope", icon: "hand.thumbsup", count: state.dope, isOn: state.myDope, tint: .green)
-            button("nope", icon: "hand.thumbsdown", count: state.nope, isOn: state.myNope, tint: .red)
-            button("star", icon: "star", count: state.star, isOn: state.myStar, tint: .yellow)
+            button("dope", title: "Dope", icon: "hand.thumbsup.fill", tint: .green)
+            button("nope", title: "Nope", icon: "hand.thumbsdown.fill", tint: .red)
+            button("star", title: "Star", icon: "star.fill", tint: .yellow)
         }
     }
 
-    @ViewBuilder
-    private func button(_ vote: String, icon: String, count: Int, isOn: Bool, tint: Color) -> some View {
-        let label = Label {
-            Text("\(count)").monospacedDigit()
-        } icon: {
-            Image(systemName: isOn ? icon + ".fill" : icon)
-                .foregroundStyle(isOn ? tint : .secondary)
+    private func button(_ vote: String, title: String, icon: String, tint: Color) -> some View {
+        Button(intent: VoteIntent(vote: vote, channelId: context.attributes.channelId,
+                                  channelTitle: context.attributes.channelTitle)) {
+            Label(title, systemImage: icon)
+                .font(compact ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity)
         }
-        .font(compact ? .caption : .subheadline)
-        .frame(maxWidth: .infinity)
-
-        if context.state.isMyTrack {
-            // Voting on your own track fails: show the counts only.
-            label.padding(.vertical, compact ? 2 : 6)
-        } else {
-            Button(intent: VoteIntent(vote: vote, channelId: context.attributes.channelId,
-                                      channelTitle: context.attributes.channelTitle)) {
-                label
-            }
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.capsule)
-            .controlSize(compact ? .small : .regular)
-            .tint(isOn ? tint : .gray)
-        }
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
+        .controlSize(compact ? .small : .regular)
+        .tint(tint)
     }
 }
 
-private struct ArtworkView: View {
-    let data: Data?
+/// The app's mark: a note with echoes on the purple.
+private struct Logo: View {
     let size: CGFloat
 
     var body: some View {
-        Group {
-            if let data, let image = UIImage(data: data) {
-                Image(uiImage: image).resizable().scaledToFill()
-            } else {
-                ZStack {
-                    accent.opacity(0.3)
-                    Image(systemName: "music.note").foregroundStyle(.white)
-                }
-            }
+        ZStack {
+            RoundedRectangle(cornerRadius: size * 0.25)
+                .fill(LinearGradient(colors: [Color(red: 0.655, green: 0.482, blue: 0.961), Color(red: 0.357, green: 0.247, blue: 0.82)],
+                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+            Image(systemName: "music.note")
+                .font(.system(size: size * 0.5, weight: .bold))
+                .foregroundStyle(.white)
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: size / 6))
     }
 }
