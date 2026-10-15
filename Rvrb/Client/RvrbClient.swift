@@ -46,6 +46,11 @@ final class RvrbClient {
     private(set) var isInRoom = false
     /// Ids of the channels the user follows.
     private(set) var followedChannelIds: Set<String> = []
+    /// When each person was last seen typing (on this clock), for "… is typing".
+    private(set) var typingSince: [String: Date] = [:]
+    @ObservationIgnored private var lastTyping: [String: Double] = [:]
+    @ObservationIgnored private var sentTypingAt: Date = .distantPast
+
     /// The message the next one sent answers.
     var replyingTo: ChatMessage?
     /// A failed join, to show as an alert (the chat isn't on screen then).
@@ -98,6 +103,7 @@ final class RvrbClient {
         socket.start()
         Task { await loadQueue() }
         Task { await loadFollowed() }
+        Task { await loadSocial() }
     }
 
     func loadFollowed() async {
@@ -110,14 +116,30 @@ final class RvrbClient {
 
     /// Ids of the users the user follows; nil until a profile asks.
     private(set) var followedUserIds: Set<String>?
+    /// Users whose chat is hidden (muted in this app or the web app).
+    private(set) var mutedUserIds: Set<String> = []
 
     func loadFollowedUsers() async {
         guard followedUserIds == nil else { return }
+        await loadSocial()
+    }
+
+    /// Who the user follows and has muted.
+    func loadSocial() async {
         do {
-            followedUserIds = try await api.followedUserIds(me: me.id)
+            (followedUserIds, mutedUserIds) = try await api.social(me: me.id)
         } catch {
-            Log.app.error("Could not load followed users: \(error.localizedDescription, privacy: .public)")
+            Log.app.error("Could not load followed and muted users: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    func setMuted(_ mute: Bool, _ userId: String) async throws {
+        try await api.setMuted(mute, me: me.id, target: userId)
+        if mute { mutedUserIds.insert(userId) } else { mutedUserIds.remove(userId) }
+    }
+
+    func isMuted(_ userId: String) -> Bool {
+        mutedUserIds.contains(userId)
     }
 
     func setFollowingUser(_ follow: Bool, _ userId: String) async throws {
@@ -238,6 +260,8 @@ final class RvrbClient {
         messages = []
         seen = []
         replyingTo = nil
+        typingSince = [:]
+        lastTyping = [:]
 
         do {
             if previous != nil {
@@ -277,6 +301,8 @@ final class RvrbClient {
 
     private func clearChannel() {
         replyingTo = nil
+        typingSince = [:]
+        lastTyping = [:]
         channel = nil
         isInRoom = false
         users = []
@@ -419,6 +445,15 @@ final class RvrbClient {
     // MARK: Chat
 
     /// Sends a chat message. It comes back as `pushChannelMessage`, so it isn't added here.
+    /// Tells the room the user is typing, at most once every few seconds (as the web app does).
+    func typed() {
+        guard channel != nil, socket.isReady, Date.now.timeIntervalSince(sentTypingAt) > 3 else { return }
+        sentTypingAt = .now
+        // The web app sends the time; the spec says a boolean, and the server takes either.
+        let time = Date.now.timeIntervalSince1970 * 1000
+        Task { try? await socket.notify("userStatus", ["typing": .number(time.rounded())]) }
+    }
+
     func send(_ text: String) async -> Bool {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return true }
@@ -495,9 +530,13 @@ final class RvrbClient {
         }
 
         let isMine = userId == me.id
+        // Whoever sent a message has stopped typing it.
+        if live { typingSince[userId] = nil }
+
         let replyTo = m["replyTo"]?.double
         let answersMe = replyTo.map { syncTime in messages.contains { $0.syncTime == syncTime && $0.isMine } } ?? false
-        let mentionsMe = !isMine && (kind == .whisper || answersMe || mentions.contains { body.plain.localizedCaseInsensitiveContains($0) })
+        let mentionsMe = !isMine && !mutedUserIds.contains(userId)
+            && (kind == .whisper || answersMe || mentions.contains { body.plain.localizedCaseInsensitiveContains($0) })
 
         let message = ChatMessage(id: key, time: Date(timeIntervalSince1970: syncTime / 1000), userId: userId, name: name,
                                   kind: kind, body: body, isMine: isMine, mentionsMe: mentionsMe,
@@ -534,6 +573,16 @@ final class RvrbClient {
             if let bot = p?["bot"], bot.object?.isEmpty == false, let channel {
                 setChannelBot(bot)
                 Task { await loadBotCommands(channelId: channel.id) }
+            }
+
+        case "updateChannelUserStatus":
+            // `{ "<user id>": { lastSeen, lastTyping } }`, a few seconds after the fact. Only new typing counts, timed
+            // on arrival so the clocks needn't agree; entries from long ago (the first batch after joining) don't.
+            let now = Date.now.timeIntervalSince1970 * 1000
+            for (userId, entry) in p?.object ?? [:] {
+                guard userId != me.id, let typed = entry["lastTyping"]?.double, typed > (lastTyping[userId] ?? 0) else { continue }
+                lastTyping[userId] = typed
+                if now - typed < 15_000 { typingSince[userId] = .now }
             }
 
         case "updateChannelUsers":
@@ -762,6 +811,28 @@ final class RvrbClient {
     }
 
     // MARK: DJing
+
+    /// A moderator, admin or creator of the joined channel (its `roles`).
+    var isModerator: Bool {
+        guard let roles = channel?.json["roles"] else { return false }
+        return ["mods", "admins", "creators"].contains { key in
+            (roles[key]?.array ?? []).contains { $0.string == me.id }
+        }
+    }
+
+    /// The playing DJ can skip their own track; moderators anyone's.
+    var canSkip: Bool {
+        nowPlaying != nil && (isMyTurn || isModerator)
+    }
+
+    func skip() async {
+        guard let channel else { return }
+        do {
+            try await api.skip(channelId: channel.id)
+        } catch {
+            addNotice("Could not skip: \(error.localizedDescription)")
+        }
+    }
 
     func toggleDJ() async {
         guard channel != nil else { return }

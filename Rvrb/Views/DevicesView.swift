@@ -9,8 +9,15 @@ struct DevicesView: View {
     @State private var devices: [Device] = []
     @State private var isLoading = false
     @State private var error: String?
+    /// The slider's value while dragging (0–100); nil shows the device's own.
+    @State private var volume: Double?
 
     private var player: Player { client.player }
+
+    /// The device the volume applies to: the chosen one, or Spotify's active one.
+    private var volumeDevice: Device? {
+        devices.first { $0.id == player.deviceId } ?? devices.first(where: \.isActive)
+    }
 
     var body: some View {
         NavigationStack {
@@ -18,6 +25,20 @@ struct DevicesView: View {
                 if let error {
                     Label(error, systemImage: "exclamationmark.triangle")
                         .foregroundStyle(.red)
+                }
+
+                if let device = volumeDevice, device.supportsVolume, !device.isRestricted {
+                    Section("Volume · \(device.name)") {
+                        HStack(spacing: 12) {
+                            Image(systemName: "speaker.fill").foregroundStyle(.secondary)
+                            Slider(value: Binding(get: { volume ?? Double(device.volume ?? 50) }, set: { volume = $0 }),
+                                   in: 0...100) { editing in
+                                if !editing, let volume { setVolume(Int(volume.rounded()), on: device) }
+                            }
+                            Image(systemName: "speaker.wave.3.fill").foregroundStyle(.secondary)
+                        }
+                        .accessibilityElement(children: .contain)
+                    }
                 }
 
                 Section {
@@ -102,6 +123,18 @@ struct DevicesView: View {
                     device.isPreferred ? "Preferred" : nil,
                     device.isRestricted ? "Can't be controlled" : nil].compactMap { $0 }
         return tags.isEmpty ? nil : tags.joined(separator: " · ")
+    }
+
+    private func setVolume(_ percent: Int, on device: Device) {
+        Task {
+            do {
+                try await client.api.setVolume(percent, deviceId: device.id)
+                error = nil
+            } catch {
+                self.error = "Could not set the volume: \(error.localizedDescription)"
+                volume = nil
+            }
+        }
     }
 
     private func load() async {

@@ -132,12 +132,36 @@ struct UserProfileView: View {
                 .foregroundStyle(.secondary)
             }
 
-            if userId != client.me.id && !(client.isBot(userId)) {
-                followButton
+            if userId != client.me.id {
+                HStack(spacing: 10) {
+                    if !client.isBot(userId) {
+                        followButton
+                    }
+                    muteButton
+                }
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
+    }
+
+    /// Hides (or shows again) the user's chat, here and in the web app.
+    private var muteButton: some View {
+        let muted = client.isMuted(userId)
+        return Button {
+            Task {
+                do {
+                    try await client.setMuted(!muted, userId)
+                } catch {
+                    self.error = "Could not \(muted ? "unmute" : "mute"): \(error.localizedDescription)"
+                }
+            }
+        } label: {
+            Label(muted ? "Muted" : "Mute", systemImage: muted ? "speaker.slash.fill" : "speaker.slash")
+        }
+        .buttonStyle(.bordered)
+        .tint(muted ? .orange : nil)
+        .help(muted ? "Show their chat again" : "Hide their chat")
     }
 
     @ViewBuilder

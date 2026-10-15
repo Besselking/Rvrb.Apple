@@ -7,6 +7,8 @@ struct QueueView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var error: String?
+    /// ISRCs never played on RVRB.
+    @State private var unplayed: Set<String> = []
     @State private var notice: String?
     @State private var showsSearch = false
 
@@ -27,7 +29,7 @@ struct QueueView: View {
 
                 Section {
                     ForEach(Array(queue.tracks.enumerated()), id: \.offset) { index, track in
-                        TrackRow(track: track, number: index + 1)
+                        TrackRow(track: track, number: index + 1, isFirstPlay: track.isrc.map(unplayed.contains) ?? false)
                             .contextMenu {
                                 Button("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") {
                                     perform { try await queue.move(from: index, to: 0) }
@@ -88,6 +90,9 @@ struct QueueView: View {
             .refreshable { perform { try await queue.reload() } }
             // Always fresh: tracks can be added from the web app or the share sheet.
             .task { perform { try await queue.reload() } }
+            .task(id: queue.tracks.compactMap(\.isrc)) {
+                unplayed = (try? await client.api.unplayed(isrcs: queue.tracks.compactMap(\.isrc))) ?? unplayed
+            }
             #if os(iOS)
             .navigationDestination(isPresented: $showsSearch) {
                 SearchView(client: client)
@@ -99,6 +104,9 @@ struct QueueView: View {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Add Tracks", systemImage: "plus") { showsSearch = true }
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    shuffleButton
+                }
                 ToolbarItem(placement: .topBarLeading) {
                     EditButton()
                 }
@@ -109,6 +117,7 @@ struct QueueView: View {
                     Divider()
                     HStack {
                         Button("Add Tracks…", systemImage: "plus") { showsSearch = true }
+                        shuffleButton
                         Text("or drag them in from Spotify")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -138,6 +147,14 @@ struct QueueView: View {
         }
     }
 
+    private var shuffleButton: some View {
+        Button("Shuffle", systemImage: "shuffle") {
+            perform { try await queue.shuffle() }
+        }
+        .disabled(queue.total < 2)
+        .help("Put your queue in random order")
+    }
+
     private func perform(_ operation: @escaping () async throws -> Void) {
         Task {
             do {
@@ -160,6 +177,7 @@ struct SearchView: View {
     @State private var adding: Set<String> = []
     @State private var isSearching = false
     @State private var error: String?
+    @State private var unplayed: Set<String> = []
 
     var body: some View {
         List {
@@ -173,7 +191,7 @@ struct SearchView: View {
                     add(track)
                 } label: {
                     HStack {
-                        TrackRow(track: track, number: nil)
+                        TrackRow(track: track, number: nil, isFirstPlay: track.isrc.map(unplayed.contains) ?? false)
                         Spacer()
                         if adding.contains(track.id) {
                             ProgressView().controlSize(.small)
@@ -230,6 +248,7 @@ struct SearchView: View {
                 if !Task.isCancelled {
                     results = tracks
                     error = nil
+                    unplayed = (try? await client.api.unplayed(isrcs: tracks.compactMap(\.isrc))) ?? []
                 }
             } catch {
                 if !Task.isCancelled { self.error = error.localizedDescription }

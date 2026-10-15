@@ -83,7 +83,19 @@ final class RvrbAPI {
 
     /// The ids of the users `me` follows, from their own `GET /api/users/{id}/profile`.
     func followedUserIds(me: String) async throws -> Set<String> {
-        Set((try await get("api/users/\(Self.escape(me))/profile")["followed"]?.array ?? []).compactMap(\.string))
+        try await social(me: me).followed
+    }
+
+    /// The users `me` follows and has muted, from their own `GET /api/users/{id}/profile`.
+    func social(me: String) async throws -> (followed: Set<String>, muted: Set<String>) {
+        let profile = try await get("api/users/\(Self.escape(me))/profile")
+        func ids(_ key: String) -> Set<String> { Set((profile[key]?.array ?? []).compactMap(\.string)) }
+        return (ids("followed"), ids("muted"))
+    }
+
+    /// `PUT` / `DELETE /api/users/{me}/muted/{target}`: muted users' chat is hidden.
+    func setMuted(_ mute: Bool, me: String, target: String) async throws {
+        _ = try await send(mute ? "PUT" : "DELETE", "api/users/\(Self.escape(me))/muted/\(Self.escape(target))")
     }
 
     /// `PUT` / `DELETE /api/users/{me}/following/{target}`.
@@ -105,6 +117,18 @@ final class RvrbAPI {
     /// `timestamp`, `skipped`). Only for users joined to the channel.
     func channelHistory(channelId: String) async throws -> [JSON] {
         try await get("api/channel/\(Self.escape(channelId))/history")["history"]?.array ?? []
+    }
+
+    /// `POST /api/channel/{id}/skip`: skips the playing track; for its DJ, or a moderator and up.
+    func skip(channelId: String) async throws {
+        _ = try await send("POST", "api/channel/\(Self.escape(channelId))/skip")
+    }
+
+    /// `POST /api/firsts`: which of the ISRCs have never been played on RVRB.
+    func unplayed(isrcs: [String]) async throws -> Set<String> {
+        guard !isrcs.isEmpty else { return [] }
+        return Set((try await send("POST", "api/firsts", body: ["isrcs": .array(isrcs.map(JSON.string))]).array ?? [])
+            .compactMap(\.string))
     }
 
     /// `GET /api/channel/{id}/bot`: the channel's own bot (name and pictures); empty when it has none. Only for
@@ -134,6 +158,12 @@ final class RvrbAPI {
     /// `PUT /api/music/devices/preferred`: saved by name, so it survives device id changes.
     func setPreferredDevice(name: String) async throws {
         _ = try await send("PUT", "api/music/devices/preferred", body: ["device_name": .string(name)])
+    }
+
+    /// `PUT /api/music/devices/volume`.
+    func setVolume(_ percent: Int, deviceId: String) async throws {
+        _ = try await send("PUT", "api/music/devices/volume",
+                           body: ["device_id": .string(deviceId), "volume_percent": .number(Double(percent))])
     }
 
     /// `GET /api/music/search`: Spotify's search response passed through.
@@ -202,6 +232,11 @@ final class RvrbAPI {
     func moveTrack(stackId: String, from position: Int, to targetPosition: Int) async throws {
         _ = try await send("PATCH", "api/music/stack/\(Self.escape(stackId))/tracks",
                            body: ["position": .number(Double(position)), "targetPosition": .number(Double(targetPosition)), "length": 1])
+    }
+
+    /// `POST /api/music/stack/{id}/shuffle`: puts the stack's tracks in random order.
+    func shuffleStack(id: String) async throws {
+        _ = try await send("POST", "api/music/stack/\(Self.escape(id))/shuffle")
     }
 
     func removeTrack(stackId: String, at position: Int) async throws {

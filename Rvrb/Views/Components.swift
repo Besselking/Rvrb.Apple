@@ -21,6 +21,8 @@ struct Artwork: View {
 struct TrackRow: View {
     let track: Track
     let number: Int?
+    /// Never played on RVRB: playing it earns a first play.
+    var isFirstPlay = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -34,10 +36,19 @@ struct TrackRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(track.name)
                     .lineLimit(1)
-                Text(track.artists)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    if isFirstPlay {
+                        Label("First", systemImage: "sparkles")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.tint)
+                            .labelStyle(.titleAndIcon)
+                            .help("Never played on RVRB: playing it is a first play")
+                    }
+                    Text(track.artists)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
             Spacer(minLength: 4)
             Text(track.duration.minutesAndSeconds)

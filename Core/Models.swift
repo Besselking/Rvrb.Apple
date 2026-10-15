@@ -14,6 +14,8 @@ struct Track: Identifiable, Hashable {
     var uri: String? { json["uri"]?.nonEmptyString }
     var album: String? { json["album"]?["name"]?.nonEmptyString }
     var duration: TimeInterval { (json["duration_ms"]?.double ?? 0) / 1000 }
+    /// The recording's ISRC, which RVRB keys first plays by.
+    var isrc: String? { json["external_ids"]?["isrc"]?.nonEmptyString }
 
     var artists: String {
         (json["artists"]?.array ?? []).compactMap { $0["name"]?.nonEmptyString }.joined(separator: ", ")
@@ -140,9 +142,13 @@ struct Device: Identifiable, Hashable {
     let isActive: Bool
     let isPreferred: Bool
     let isRestricted: Bool
+    let volume: Int?
+    let supportsVolume: Bool
 
     init?(_ json: JSON) {
         guard let id = json["id"]?.nonEmptyString else { return nil }
+        volume = json["volume_percent"]?.int
+        supportsVolume = json["supports_volume"]?.bool ?? (json["volume_percent"]?.int != nil)
         self.id = id
         name = json["name"]?.nonEmptyString ?? id
         type = json["type"]?.string ?? ""

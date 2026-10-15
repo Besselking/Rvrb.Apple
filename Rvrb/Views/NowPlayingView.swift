@@ -115,10 +115,37 @@ private struct VoteBar: View {
     let client: RvrbClient
     let votes: Votes
 
+    @State private var confirmsSkip = false
+
     var body: some View {
         // Voting on your own track fails with "Cannot vote for yourself".
         let disabled = client.isMyTurn
 
+        HStack(spacing: 8) {
+            votes(disabled: disabled)
+            Spacer(minLength: 0)
+            if client.canSkip {
+                Button {
+                    // Your own track skips at once; someone else's (as a moderator) asks first.
+                    if client.isMyTurn {
+                        Task { await client.skip() }
+                    } else {
+                        confirmsSkip = true
+                    }
+                } label: {
+                    Label("Skip", systemImage: "forward.end.fill")
+                }
+                .buttonStyle(.bordered)
+                .help(client.isMyTurn ? "Skip your track" : "Skip this DJ's track")
+                .confirmationDialog("Skip \(client.djIds.first.map { client.name(for: $0) } ?? "the DJ")'s track?",
+                                    isPresented: $confirmsSkip, titleVisibility: .visible) {
+                    Button("Skip Track", role: .destructive) { Task { await client.skip() } }
+                }
+            }
+        }
+    }
+
+    private func votes(disabled: Bool) -> some View {
         HStack(spacing: 8) {
             VoteButton(title: "Dope", systemImage: "hand.thumbsup", count: votes.dope, isOn: votes.mine.dope, tint: .green) {
                 Task { await client.vote(.dope) }

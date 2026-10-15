@@ -47,6 +47,8 @@ struct ComposerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            TypingIndicator(client: client)
+
             switch suggestions {
             case .commands(let prefix, let commands):
                 SuggestionList(items: commands, selected: min(selectedSuggestion, commands.count - 1), onPick: complete) {
@@ -154,6 +156,7 @@ struct ComposerView: View {
                 text = String(new.prefix(client.chatMaxLength))
             }
             selectedSuggestion = 0
+            if !new.isEmpty { client.typed() }
         }
     }
 
@@ -214,6 +217,46 @@ struct ComposerView: View {
             if await !client.send(message), text.isEmpty {
                 text = message
             }
+        }
+    }
+}
+
+/// "Seeg is typing…" while others type (shown a few seconds after their last keystroke reaches us).
+private struct TypingIndicator: View {
+    let client: RvrbClient
+    private static let window: TimeInterval = 6
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let names = client.typingSince
+                .filter { context.date.timeIntervalSince($0.value) < Self.window && !client.isMuted($0.key) }
+                .sorted { $0.value < $1.value }
+                .map { client.name(for: $0.key) }
+
+            if let text = Self.text(names) {
+                HStack(spacing: 6) {
+                    Image(systemName: "ellipsis.bubble")
+                        .symbolEffect(.variableColor.iterative, options: .repeating)
+                    Text(text)
+                        .lineLimit(1)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+                .padding(.top, 6)
+                .transition(.opacity)
+                .accessibilityElement(children: .combine)
+            }
+        }
+    }
+
+    private static func text(_ names: [String]) -> String? {
+        switch names.count {
+        case 0: nil
+        case 1: "\(names[0]) is typing…"
+        case 2: "\(names[0]) and \(names[1]) are typing…"
+        default: "Several people are typing…"
         }
     }
 }

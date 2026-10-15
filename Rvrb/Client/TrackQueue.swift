@@ -41,6 +41,10 @@ final class TrackQueue {
         return result
     }
 
+    func shuffle() async throws {
+        try await change { try await self.api.shuffleStack(id: $0) }
+    }
+
     func remove(at position: Int) async throws {
         try await change { try await self.api.removeTrack(stackId: $0, at: position) }
     }

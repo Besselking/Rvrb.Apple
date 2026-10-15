@@ -9,7 +9,9 @@ struct ChatView: View {
     @State private var isAtBottom = true
 
     var body: some View {
-        let messages = client.messages
+        // Muted people's messages are left out, as on the web.
+        let muted = client.mutedUserIds
+        let messages = muted.isEmpty ? client.messages : client.messages.filter { !muted.contains($0.userId ?? "") }
         // Replies name the answered message by its syncTime.
         let bySyncTime = Dictionary(messages.compactMap { message in message.syncTime.map { ($0, message) } },
                                     uniquingKeysWith: { first, _ in first })
