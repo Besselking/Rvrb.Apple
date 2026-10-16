@@ -3,14 +3,17 @@ import Observation
 
 /// The user's DJ queue: the stack marked `activeQueue` (created when there is none). While the user DJs, the server
 /// asks for the next track (`nextChannelTrack`); the client answers with the top and takes it off once it plays,
-/// because the server doesn't. The first page is kept in memory so that question can be answered within 2.5 s.
+/// because the server doesn't. The queue is kept in memory so that question can be answered within 2.5 s.
 @Observable
 final class TrackQueue {
+    /// The most the server returns per request.
     static let pageSize = 50
+    /// Pages loaded at most, to keep a very long queue from loading forever.
+    static let maxPages = 20
 
-    /// The first `pageSize` tracks, top first.
+    /// The tracks, top first: all of them, up to `maxPages` pages.
     private(set) var tracks: [Track] = []
-    /// All tracks, including those past the first page.
+    /// All tracks, including any past `maxPages`.
     private(set) var total = 0
     private(set) var isLoaded = false
 
@@ -90,10 +93,22 @@ final class TrackQueue {
         try await task.value
     }
 
+    /// Loads the whole queue, a page of 50 at a time.
     private func reloadNow() async throws {
-        let page = try await api.stack(id: try await resolveStackId(), page: 0, limit: Self.pageSize)
-        tracks = (page["tracks"]?.array ?? []).compactMap(Track.init)
-        total = page["totalItems"]?.int ?? tracks.count
+        let stackId = try await resolveStackId()
+        var loaded: [Track] = []
+        var count = 0
+
+        for page in 0..<Self.maxPages {
+            let result = try await api.stack(id: stackId, page: page, limit: Self.pageSize)
+            let pageTracks = (result["tracks"]?.array ?? []).compactMap(Track.init)
+            loaded += pageTracks
+            count = result["totalItems"]?.int ?? loaded.count
+            if pageTracks.count < Self.pageSize || loaded.count >= count { break }
+        }
+
+        tracks = loaded
+        total = count
         isLoaded = true
     }
 

@@ -153,6 +153,7 @@ struct QueueView: View {
                 #endif
             } footer: {
                 if queue.total > queue.tracks.count {
+                    // Only past TrackQueue.maxPages pages.
                     Text("Showing the first \(queue.tracks.count) of \(queue.total) tracks.")
                 } else if client.isDJ {
                     Text("The top track plays on your next turn.")
