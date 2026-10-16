@@ -7,6 +7,11 @@ struct ChatView: View {
 
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var isAtBottom = true
+    @Environment(SpinGrab.self) private var grab: SpinGrab?
+    /// The scroll offset, and where it's pinned while a spinning image is held (easter egg): the window turns
+    /// under the still pointer, which would otherwise read as dragging past the edge and auto-scroll.
+    @State private var offset: CGFloat = 0
+    @State private var pinnedOffset: CGFloat?
 
     var body: some View {
         // Muted people's messages are left out, as on the web.
@@ -64,9 +69,20 @@ struct ChatView: View {
             isAtBottom = atBottom
         }
         .onChange(of: messages.last?.id) {
-            if isAtBottom {
+            if isAtBottom && pinnedOffset == nil {
                 position.scrollTo(edge: .bottom)
             }
+        }
+        .scrollDisabled(pinnedOffset != nil)
+        .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, new in
+            if let pinnedOffset, abs(new - pinnedOffset) > 0.5 {
+                position.scrollTo(y: pinnedOffset)
+            } else {
+                offset = new
+            }
+        }
+        .onChange(of: grab?.isHeld ?? false) { _, held in
+            pinnedOffset = held ? offset : nil
         }
     }
 
