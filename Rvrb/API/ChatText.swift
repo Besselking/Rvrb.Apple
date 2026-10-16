@@ -8,10 +8,19 @@ enum ChatText {
         case data(Data)
     }
 
+    /// How the web app draws an image, from its classes: `circular` (Semantic UI's round image) and `spin` (RVRB's
+    /// one turn a second, which the A&E channel's /spin command uses on album art).
+    struct ImageStyle: Hashable {
+        var circular = false
+        var spins = false
+    }
+
     struct Body {
         var text: AttributedString
         var plain: String
         var images: [Image]
+        /// Styles of the images that have any.
+        var styles: [Image: ImageStyle] = [:]
 
         static let empty = Body(text: "", plain: "", images: [])
     }
@@ -26,12 +35,24 @@ enum ChatText {
         }
 
         var images: [Image] = []
+        var styles: [Image: ImageStyle] = [:]
         for match in imageTag.matches(html) {
             guard let src = match.group(1, in: html) else { continue }
-            if src.hasPrefix("data:image") {
-                if let image = dataImage(src) { images.append(image) }
+            let image: Image? = if src.hasPrefix("data:image") {
+                dataImage(src)
             } else if let url = URL(string: decodeEntities(src)), url.scheme?.hasPrefix("http") == true {
-                images.append(.url(url))
+                .url(url)
+            } else {
+                nil
+            }
+            guard let image else { continue }
+            images.append(image)
+
+            if let tag = Range(match.range, in: html).map({ String(html[$0]) }),
+               let classes = classAttribute.firstMatch(in: tag, range: NSRange(tag.startIndex..., in: tag))?.group(1, in: tag) {
+                let names = Set(classes.split(whereSeparator: \.isWhitespace).map { $0.lowercased() })
+                let style = ImageStyle(circular: names.contains("circular"), spins: names.contains("spin"))
+                if style != ImageStyle() { styles[image] = style }
             }
         }
 
@@ -95,7 +116,7 @@ enum ChatText {
         result += linkified(String(rest))
         plain += rest
 
-        return Body(text: result, plain: plain, images: images)
+        return Body(text: result, plain: plain, images: images, styles: styles)
     }
 
     /// Plain text with any bare URLs made into links.
@@ -151,6 +172,7 @@ enum ChatText {
     ]
 
     private static let imageTag = regex(#"<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["'][^>]*>|<img\b[^>]*>"#)
+    private static let classAttribute = regex(#"\bclass\s*=\s*["']([^"']*)["']"#)
     private static let lineBreak = regex(#"<br\s*/?>|</p>|</div>|</li>|</h[1-6]>"#)
     private static let anchor = regex(#"<a\b[^>]*?\bhref\s*=\s*["']([^"']+)["'][^>]*>(.*?)</a>"#)
     private static let tag = regex("<[^>]+>")

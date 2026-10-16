@@ -597,7 +597,8 @@ final class RvrbClient {
         if m["expandable"]?.bool == true, let summary = m["summary"]?.nonEmptyString {
             let summaryBody = ChatText.parse(.string(summary))
             body = ChatText.Body(text: summaryBody.text + "\n" + body.text, plain: summaryBody.plain + "\n" + body.plain,
-                                 images: summaryBody.images + body.images)
+                                 images: summaryBody.images + body.images,
+                                 styles: summaryBody.styles.merging(body.styles) { first, _ in first })
         }
 
         let kind: ChatMessage.Kind = switch type {

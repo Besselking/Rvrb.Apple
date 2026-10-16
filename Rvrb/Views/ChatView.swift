@@ -173,7 +173,7 @@ struct MessageRow: View {
                     }
 
                     ForEach(message.body.images, id: \.self) { image in
-                        ChatImageView(image: image)
+                        ChatImageView(image: image, style: message.body.styles[image] ?? .init())
                     }
                 }
                 Spacer(minLength: 0)
@@ -198,17 +198,53 @@ private struct ChatImageView: View {
     static let height: CGFloat = 180
 
     let image: ChatText.Image
+    var style = ChatText.ImageStyle()
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        RemoteImage(source: image, maxPixelSize: 780, contentMode: .fit, upscales: false) { failed in
-            if failed {
-                Label("Image", systemImage: "photo").foregroundStyle(.secondary)
+        if style.circular || style.spins {
+            styled
+        } else {
+            plain
+        }
+    }
+
+    private var plain: some View {
+        RemoteImage(source: image, maxPixelSize: 780, contentMode: .fit, upscales: false) { placeholder($0) }
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .frame(maxWidth: 260, minHeight: Self.height, maxHeight: Self.height, alignment: .leading)
+    }
+
+    /// As the web app's CSS: `circular` is a round image, `spin` one turn a second, forever (not with Reduce Motion).
+    private var styled: some View {
+        let side = Self.height
+        let picture = RemoteImage(source: image, maxPixelSize: side * 3, contentMode: style.circular ? .fill : .fit) {
+            placeholder($0)
+        }
+        .frame(width: side, height: side)
+        .clipShape(style.circular ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 8)))
+
+        return Group {
+            if style.spins && !reduceMotion {
+                TimelineView(.animation) { context in
+                    let turn = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1)
+                    picture.rotationEffect(.degrees(turn * 360))
+                }
             } else {
-                ProgressView()
+                picture
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .frame(maxWidth: 260, minHeight: Self.height, maxHeight: Self.height, alignment: .leading)
+        .frame(height: side)
+    }
+
+    @ViewBuilder
+    private func placeholder(_ failed: Bool) -> some View {
+        if failed {
+            Label("Image", systemImage: "photo").foregroundStyle(.secondary)
+        } else {
+            ProgressView()
+        }
     }
 }
 
