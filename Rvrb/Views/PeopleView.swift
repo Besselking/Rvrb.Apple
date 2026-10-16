@@ -30,13 +30,12 @@ struct PeopleView: View {
             }
 
             ForEach(Array(client.djIds.enumerated()), id: \.element) { index, id in
-                Button { onSelect(id) } label: {
-                    PersonRow(name: client.name(for: id), url: client.avatarURL(for: id), seed: id,
-                              activity: client.activity(of: id), starred: client.hasStarred(id), isBot: client.isBot(id),
-                              role: client.role(of: id),
-                              detail: index == 0 ? "Playing" : "#\(index + 1)", isMe: id == client.me.id)
-                }
-                .buttonStyle(.plain)
+                PersonRow(name: client.name(for: id), url: client.avatarURL(for: id), seed: id,
+                          activity: client.activity(of: id), starred: client.hasStarred(id), isBot: client.isBot(id),
+                          role: client.role(of: id),
+                          detail: index == 0 ? "Playing" : "#\(index + 1)", isMe: id == client.me.id)
+                    // A tap, not a Button: a button takes the mouse on press, so the Mac list never starts a drag.
+                    .selectable { onSelect(id) }
                 // The DJ playing now stays put.
                 .moveDisabled(index == 0 || !client.isModerator)
             }
@@ -76,13 +75,11 @@ struct PeopleView: View {
     private var listeners: some View {
         Section("Listeners (\(client.listeners.count))") {
             ForEach(client.listeners) { user in
-                Button { onSelect(user.id) } label: {
-                    PersonRow(name: user.name, url: client.avatarURL(for: user.id), seed: user.id,
-                              activity: client.activity(of: user.id), starred: client.hasStarred(user.id),
-                              isBot: user.isBot, role: client.role(of: user.id), detail: nil,
-                              isMe: user.id == client.me.id)
-                }
-                .buttonStyle(.plain)
+                PersonRow(name: user.name, url: client.avatarURL(for: user.id), seed: user.id,
+                          activity: client.activity(of: user.id), starred: client.hasStarred(user.id),
+                          isBot: user.isBot, role: client.role(of: user.id), detail: nil,
+                          isMe: user.id == client.me.id)
+                    .selectable { onSelect(user.id) }
             }
         }
     }
@@ -167,5 +164,15 @@ struct RoleTag: View {
         case .admin: .pink
         case .mod: .teal
         }
+    }
+}
+
+private extension View {
+    /// Tappable like a button (and announced as one), without taking the mouse on press.
+    func selectable(_ action: @escaping () -> Void) -> some View {
+        contentShape(Rectangle())
+            .onTapGesture(perform: action)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction(.default, action)
     }
 }
