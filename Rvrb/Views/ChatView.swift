@@ -7,6 +7,7 @@ struct ChatView: View {
 
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var isAtBottom = true
+    @Environment(SpinGrab.self) private var grab: SpinGrab?
 
     var body: some View {
         // Muted people's messages are left out, as on the web.
@@ -57,6 +58,7 @@ struct ChatView: View {
         }
         .scrollPosition($position)
         .defaultScrollAnchor(.bottom)
+        .modifier(SpinArea(grab: grab))
         .scrollDismissesKeyboard(.interactively)
         .onScrollGeometryChange(for: Bool.self) { geometry in
             geometry.contentOffset.y + geometry.containerSize.height >= geometry.contentSize.height - 60
@@ -419,3 +421,16 @@ private struct Grabbable: ViewModifier {
     }
 }
 #endif
+
+/// The grab easter egg's spinning area, when there is one.
+private struct SpinArea: ViewModifier {
+    let grab: SpinGrab?
+
+    func body(content: Content) -> some View {
+        if let grab {
+            content.modifier(SpinGrabArea(grab: grab))
+        } else {
+            content
+        }
+    }
+}

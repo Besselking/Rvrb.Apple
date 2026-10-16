@@ -4,11 +4,11 @@ import SwiftUI
 import AppKit
 #endif
 
-/// An easter egg (Mac): grab a spinning chat image (/spin) and hold it still, and the rest of the window spins
-/// around it instead, at the image's one turn a second. Letting go springs the window back upright.
+/// An easter egg (Mac): grab a spinning chat image (/spin) and hold it still, and the chat spins around it
+/// instead, at the image's one turn a second. Letting go springs it back upright.
 ///
-/// What spins is a snapshot of the window laid over it, with the held image cut out of it and kept still on top:
-/// turning the live interface was slow and moved the chat under the pointer.
+/// What spins is a snapshot of the chat laid over it, with the held image cut out of it and kept still on top:
+/// turning the live interface was slow and moved the chat under the pointer. The sidebars stay as they are.
 @Observable
 final class SpinGrab {
     /// When the image was grabbed; nil while nothing is held.
@@ -18,7 +18,9 @@ final class SpinGrab {
     /// The window as it was when grabbed, and its points-to-pixels scale.
     private(set) var snapshot: CGImage?
     private(set) var scale: CGFloat = 2
-    /// The held image's centre and size, in the window.
+    /// The chat's frame in the window (set by the chat), the area that spins.
+    var area: CGRect = .zero
+    /// The held image's centre in the chat, and its size.
     private(set) var center: CGPoint = .zero
     private(set) var side: CGFloat = 0
     /// The snapshot's angle once let go, animated to a whole turn.
@@ -37,10 +39,15 @@ final class SpinGrab {
         grabbedAt.map { date.timeIntervalSince($0) * 360 } ?? settledAngle
     }
 
+    /// `center` is in the window.
     func grab(_ holder: UUID, center: CGPoint, side: CGFloat) {
-        guard grabbedAt == nil, let (image, scale) = Self.windowSnapshot() else { return }
+        guard grabbedAt == nil, area.width > 0, area.height > 0,
+              let (window, scale) = Self.windowSnapshot(),
+              let image = window.cropping(to: CGRect(x: area.minX * scale, y: area.minY * scale,
+                                                     width: area.width * scale, height: area.height * scale))
+        else { return }
         self.holder = holder
-        self.center = center
+        self.center = CGPoint(x: center.x - area.minX, y: center.y - area.minY)
         self.side = side
         snapshot = image
         self.scale = scale
@@ -77,33 +84,35 @@ final class SpinGrab {
     }
 }
 
-/// Lays the spinning snapshot over the window while an image is held (and while it settles).
-struct SpinGrabWindow: ViewModifier {
+/// Lays the spinning snapshot over the chat while an image is held (and while it settles).
+struct SpinGrabArea: ViewModifier {
     let grab: SpinGrab
 
     func body(content: Content) -> some View {
-        content.overlay {
-            if let snapshot = grab.snapshot {
-                TimelineView(.animation(minimumInterval: nil, paused: !grab.isHeld)) { context in
-                    let picture = Image(decorative: snapshot, scale: grab.scale).resizable()
-                    ZStack {
-                        background
-                        picture
-                            .rotationEffect(.degrees(grab.angle(at: context.date)), anchor: grab.anchor)
-                        // The held image, cut out of the snapshot and kept still.
-                        picture
-                            .mask {
-                                Circle()
-                                    .frame(width: grab.side, height: grab.side)
-                                    .position(grab.center)
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                            }
+        content
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { grab.area = $0 }
+            .overlay {
+                if let snapshot = grab.snapshot {
+                    TimelineView(.animation(minimumInterval: nil, paused: !grab.isHeld)) { context in
+                        let picture = Image(decorative: snapshot, scale: grab.scale).resizable()
+                        ZStack {
+                            background
+                            picture
+                                .rotationEffect(.degrees(grab.angle(at: context.date)), anchor: grab.anchor)
+                            // The held image, cut out of the snapshot and kept still.
+                            picture
+                                .mask {
+                                    Circle()
+                                        .frame(width: grab.side, height: grab.side)
+                                        .position(grab.center)
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                                }
+                        }
                     }
+                    .clipped()
+                    .allowsHitTesting(false)
                 }
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
             }
-        }
     }
 
     private var background: Color {

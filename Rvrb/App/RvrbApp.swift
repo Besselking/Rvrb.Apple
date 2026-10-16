@@ -22,7 +22,6 @@ struct RvrbApp: App {
             RootView()
                 .environment(model)
                 .environment(spinGrab)
-                .modifier(SpinGrabWindow(grab: spinGrab))
                 .task {
                     #if os(macOS)
                     appDelegate.model = model
