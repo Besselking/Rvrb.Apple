@@ -101,6 +101,12 @@ final class RvrbClient {
         liveActivity.start()
         #endif
         socket.start()
+        // Quit while DJing: back to the channel, on the connection the server kept.
+        if let saved = UserDefaults.standard.dictionary(forKey: Self.resumeKey) as? [String: String],
+           let channel = Channel(["_id": .string(saved["id"] ?? ""), "title": .string(saved["title"] ?? "")]) {
+            UserDefaults.standard.removeObject(forKey: Self.resumeKey)
+            Task { await join(channel) }
+        }
         Task { await loadQueue() }
         Task { await loadFollowed() }
         Task { await loadSocial() }
@@ -176,6 +182,23 @@ final class RvrbClient {
     /// Stops playback and leaves the channel (send `leave` on exit: without it the account stays in the channel).
     func shutdown() async {
         await leave()
+        socket.stop()
+    }
+
+    /// The channel to rejoin on the next launch of this copy of the app.
+    private static var resumeKey: String { "resumeChannel:" + Bundle.main.bundlePath }
+
+    /// Quitting the app. On the decks, the spot is kept: the server is told this is a hidden mobile client, which
+    /// it keeps for an hour after the socket closes and serves its turns for, and the next launch resumes the
+    /// connection (same client id) and the channel. Otherwise it leaves, as before.
+    func quit() async {
+        guard let channel, isDJ, socket.isReady else {
+            await shutdown()
+            return
+        }
+
+        UserDefaults.standard.set(["id": channel.id, "title": channel.title], forKey: Self.resumeKey)
+        try? await socket.notify("appState", ["hidden": true, "mobile": true])
         socket.stop()
     }
 
@@ -328,9 +351,8 @@ final class RvrbClient {
     }
 
     private func socketReady() {
-        #if os(iOS)
+        // Also on the Mac: a connection resumed after quitting while DJing still counts as a hidden mobile one.
         sendAppState()
-        #endif
 
         if let pending = pendingJoin {
             pendingJoin = nil
@@ -439,7 +461,12 @@ final class RvrbClient {
     private func sendAppState() {
         guard socket.isReady else { return }
         let hidden = isHidden
-        Task { try? await socket.notify("appState", ["hidden": .bool(hidden), "mobile": true]) }
+        #if os(iOS)
+        let mobile = true
+        #else
+        let mobile = false
+        #endif
+        Task { try? await socket.notify("appState", ["hidden": .bool(hidden), "mobile": .bool(mobile)]) }
     }
 
     // MARK: Chat

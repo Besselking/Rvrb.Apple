@@ -20,6 +20,15 @@ xcodebuild -project Rvrb.xcodeproj -scheme Rvrb -destination 'platform=macOS' bu
 
 Files under `Rvrb/` are picked up automatically (synchronized folder).
 
+To install a Release build of the Mac app (what Archive > Copy App does), quitting and reopening the running copy:
+
+```bash
+Scripts/install-mac.sh
+```
+
+Quitting while you're on the decks keeps your spot: the app tells RVRB it's a sleeping mobile client (kept for an
+hour, its turns played server-side) and reconnects as the same client when it's opened again.
+
 ## Logging in
 
 RVRB only logs in through Spotify and redirects back to its own web app. The app runs that login in a web view and

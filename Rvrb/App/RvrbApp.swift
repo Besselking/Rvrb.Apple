@@ -40,7 +40,8 @@ struct RvrbApp: App {
 }
 
 #if os(macOS)
-/// Sends `leave` before quitting: quitting without it left the account in the channel.
+/// Before quitting, leaves the channel (quitting without `leave` left the account in it), or keeps the spot of a
+/// DJ (see `RvrbClient.quit()`).
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var model: AppModel?
 
@@ -52,7 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let model, model.client?.channel != nil else { return .terminateNow }
 
         Task {
-            await model.shutdown()
+            await model.quit()
             sender.reply(toApplicationShouldTerminate: true)
         }
         return .terminateLater

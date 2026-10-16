@@ -5,8 +5,9 @@ import os
 /// JSON-RPC 2.0 over the RVRB websocket (https://app.rvrb.one/api-docs/asyncapi.yaml). Answers `keepAwake`,
 /// reconnects with backoff, and hands server notifications and server requests to the client.
 ///
-/// The `clientId` is new for every app launch: two connections with the same id bump each other off in a loop,
-/// and the id only exists so that a reconnect resumes the same connection.
+/// The `clientId` lets a reconnect (or the next launch) resume the same server connection. It's kept per installed
+/// copy of the app: two connections with the same id bump each other off in a loop, so an Xcode build running next to
+/// an installed copy must not share it.
 @Observable
 final class RvrbSocket {
     enum Status: Equatable {
@@ -44,7 +45,16 @@ final class RvrbSocket {
         throw RvrbError.server("\(method) is not supported")
     }
 
-    @ObservationIgnored let clientId = "rvrb-swift-\(UUID().uuidString.lowercased())"
+    @ObservationIgnored let clientId = RvrbSocket.savedClientId()
+
+    /// One per app copy (its path); a copy can't run twice at once.
+    private static func savedClientId() -> String {
+        let key = "clientId:" + Bundle.main.bundlePath
+        if let id = UserDefaults.standard.string(forKey: key) { return id }
+        let id = "rvrb-swift-\(UUID().uuidString.lowercased())"
+        UserDefaults.standard.set(id, forKey: key)
+        return id
+    }
 
     @ObservationIgnored private let session: Session
     @ObservationIgnored private let urlSession = URLSession(configuration: .default)

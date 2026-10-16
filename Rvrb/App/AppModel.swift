@@ -110,4 +110,9 @@ final class AppModel {
     func shutdown() async {
         await client?.shutdown()
     }
+
+    /// Quitting: keeps a DJ's spot (see `RvrbClient.quit()`).
+    func quit() async {
+        await client?.quit()
+    }
 }
