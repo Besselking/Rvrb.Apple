@@ -2,9 +2,11 @@ import SwiftUI
 
 /// The joined channel: now playing with votes, the chat, and the message box. People are in an inspector (a
 /// sheet on iPhone, presented through the one `sheet(item:)`: two presenters on one view fight each other); the
-/// queue, track search and Spotify device in sheets.
+/// queue (unless it's in the sidebar), channels, track search and Spotify device in sheets.
 struct RoomView: View {
     let client: RvrbClient
+    /// The sidebar holds the queue (Mac, iPad): the toolbar offers channels instead.
+    var queueInSidebar = false
 
     #if os(macOS)
     @State private var showsPeople = true
@@ -27,12 +29,13 @@ struct RoomView: View {
     }
 
     enum Sheet: Identifiable, Hashable {
-        case queue, search, devices, people, info
+        case queue, channels, search, devices, people, info
         case profile(userId: String)
 
         var id: String {
             switch self {
             case .queue: "queue"
+            case .channels: "channels"
             case .search: "search"
             case .devices: "devices"
             case .people: "people"
@@ -102,6 +105,7 @@ struct RoomView: View {
         .sheet(item: $sheet) { sheet in
             switch sheet {
             case .queue: QueueView(client: client)
+            case .channels: ChannelsSheet(client: client)
             case .search: SearchSheet(client: client)
             case .devices: DevicesView(client: client)
             case .people: PeopleSheet(client: client)
@@ -157,12 +161,21 @@ struct RoomView: View {
             .help(client.isDJ ? "Leave the decks" : "Join the decks and play from your queue")
             .disabled(client.channel == nil)
 
-            Button {
-                sheet = .queue
-            } label: {
-                Label("Queue", systemImage: "list.bullet")
+            if queueInSidebar {
+                Button {
+                    sheet = .channels
+                } label: {
+                    Label("Channels", systemImage: "music.note.house")
+                }
+                .help("Switch channels")
+            } else {
+                Button {
+                    sheet = .queue
+                } label: {
+                    Label("Queue", systemImage: "list.bullet")
+                }
+                .help("Your DJ queue")
             }
-            .help("Your DJ queue")
 
             Button {
                 if peopleInSheet {

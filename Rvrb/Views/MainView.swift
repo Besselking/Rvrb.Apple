@@ -1,24 +1,54 @@
 import SwiftUI
 
-/// Channels in the sidebar, the joined channel in the detail. On iPhone the split view collapses into a stack.
+/// On the Mac and iPad, the user's queue in the sidebar (to manage while chatting) and the channel in the detail;
+/// channels are picked in the detail when not in one, or from the room's Channels sheet. On iPhone, the channel list
+/// leads to the channel, and the queue is a sheet.
 struct MainView: View {
     let client: RvrbClient
 
     @Environment(\.scenePhase) private var scenePhase
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
     @State private var selection: Channel?
+
+    private var queueInSidebar: Bool {
+        #if os(iOS)
+        sizeClass == .regular
+        #else
+        true
+        #endif
+    }
 
     var body: some View {
         @Bindable var client = client
 
-        NavigationSplitView {
-            ChannelListView(client: client, selection: $selection)
-                .navigationSplitViewColumnWidth(min: 240, ideal: 290, max: 400)
-        } detail: {
-            if selection != nil || client.channel != nil {
-                RoomView(client: client)
+        Group {
+            if queueInSidebar {
+                NavigationSplitView {
+                    QueueView(client: client, style: .sidebar)
+                        .navigationSplitViewColumnWidth(min: 260, ideal: 320, max: 440)
+                } detail: {
+                    if client.channel != nil || client.joining != nil {
+                        RoomView(client: client, queueInSidebar: true)
+                    } else {
+                        ChannelListView(client: client, selection: .constant(nil), placement: .detail) { channel in
+                            Task { await client.join(channel) }
+                        }
+                    }
+                }
             } else {
-                ContentUnavailableView("Pick a Channel", systemImage: "music.note.house",
-                                       description: Text("Join a channel to chat, vote and DJ. Its music plays on your Spotify."))
+                NavigationSplitView {
+                    ChannelListView(client: client, selection: $selection)
+                        .navigationSplitViewColumnWidth(min: 240, ideal: 290, max: 400)
+                } detail: {
+                    if selection != nil || client.channel != nil {
+                        RoomView(client: client)
+                    } else {
+                        ContentUnavailableView("Pick a Channel", systemImage: "music.note.house",
+                                               description: Text("Join a channel to chat, vote and DJ. Its music plays on your Spotify."))
+                    }
+                }
             }
         }
         .onChange(of: selection) { _, channel in
@@ -38,5 +68,34 @@ struct MainView: View {
         } message: {
             Text(client.joinError ?? "")
         }
+    }
+}
+
+/// Switching channels from a room when the sidebar holds the queue.
+struct ChannelsSheet: View {
+    let client: RvrbClient
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ChannelListView(client: client, selection: .constant(nil), placement: .sheet) { channel in
+                dismiss()
+                if channel.id != client.channel?.id {
+                    Task { await client.join(channel) }
+                }
+            }
+            #if os(iOS)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            #else
+            .sheetBar { Button("Done") { dismiss() }.keyboardShortcut(.cancelAction) }
+            #endif
+        }
+        #if os(macOS)
+        .frame(minWidth: 460, minHeight: 600)
+        #endif
     }
 }

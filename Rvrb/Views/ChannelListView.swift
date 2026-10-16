@@ -3,8 +3,14 @@ import SwiftUI
 /// The channel lists the web app has (popular, followed, the user's own, all), 16 per page with the most listeners
 /// first, searchable. Searching Popular searches all channels: popular only has channels with someone in them.
 struct ChannelListView: View {
+    /// Where the list is shown, which decides where its search field goes on the Mac.
+    enum Placement { case sidebar, detail, sheet }
+
     let client: RvrbClient
     @Binding var selection: Channel?
+    var placement: Placement = .sidebar
+    /// Picking a channel (the sheet and the main area); the sidebar selects instead.
+    var onPick: ((Channel) -> Void)? = nil
 
     @Environment(AppModel.self) private var model
     @AppStorage("channelList") private var list: RvrbAPI.ChannelList = .popular
@@ -23,8 +29,7 @@ struct ChannelListView: View {
             }
 
             ForEach(channels) { channel in
-                ChannelRow(channel: channel, isJoined: client.channel?.id == channel.id,
-                           isFollowed: client.followedChannelIds.contains(channel.id))
+                row(channel)
                     .tag(channel)
                     .onAppear {
                         if channel == channels.last, hasMore, !isLoading {
@@ -77,12 +82,7 @@ struct ChannelListView: View {
             .padding(.vertical, 8)
         }
         .navigationTitle("Channels")
-        #if os(macOS)
-        // In the sidebar itself, so it collapses with it (the default is the window's toolbar).
-        .searchable(text: $query, placement: .sidebar, prompt: "Search channels")
-        #else
-        .searchable(text: $query, prompt: "Search channels")
-        #endif
+        .modifier(SearchField(query: $query, placement: placement))
         .task(id: "\(list.rawValue)|\(query)") {
             if !query.isEmpty {
                 try? await Task.sleep(for: .milliseconds(350))
@@ -103,6 +103,18 @@ struct ChannelListView: View {
                     Label(client.me.name, systemImage: "person.crop.circle")
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func row(_ channel: Channel) -> some View {
+        let row = ChannelRow(channel: channel, isJoined: client.channel?.id == channel.id,
+                             isFollowed: client.followedChannelIds.contains(channel.id))
+        if let onPick {
+            Button { onPick(channel) } label: { row.contentShape(Rectangle()) }
+                .buttonStyle(.plain)
+        } else {
+            row
         }
     }
 
@@ -185,5 +197,32 @@ private struct ChannelRow: View {
             }
         }
         .padding(.vertical, 2)
+    }
+}
+
+/// The channel search. On the Mac: in the sidebar itself, so it collapses with it (the default is the window's
+/// toolbar), and a field of its own in a sheet, which has no toolbar.
+private struct SearchField: ViewModifier {
+    @Binding var query: String
+    let placement: ChannelListView.Placement
+
+    func body(content: Content) -> some View {
+        #if os(macOS)
+        switch placement {
+        case .sidebar:
+            content.searchable(text: $query, placement: .sidebar, prompt: "Search channels")
+        case .detail:
+            content.searchable(text: $query, prompt: "Search channels")
+        case .sheet:
+            content.safeAreaInset(edge: .top, spacing: 0) {
+                TextField("Search channels", text: $query)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal)
+                    .padding(.top, 10)
+            }
+        }
+        #else
+        content.searchable(text: $query, prompt: "Search channels")
+        #endif
     }
 }

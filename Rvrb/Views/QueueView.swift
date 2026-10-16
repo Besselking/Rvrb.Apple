@@ -1,9 +1,13 @@
 import SwiftUI
 
 /// The user's DJ queue: reorder, remove, play next, and add tracks (by search, or by dropping Spotify links between
-/// rows). On the Mac the actions sit in a bar at the bottom: a sheet there has no toolbar to put them in.
+/// rows). A sheet on iPhone; on the Mac and iPad it's the sidebar, there to manage while chatting. On the Mac and in
+/// the sidebar the actions sit in a bar at the bottom (a Mac sheet has no toolbar to put them in).
 struct QueueView: View {
+    enum Style { case sheet, sidebar }
+
     let client: RvrbClient
+    var style: Style = .sheet
 
     @Environment(\.dismiss) private var dismiss
     @State private var error: String?
@@ -15,115 +19,26 @@ struct QueueView: View {
     private var queue: TrackQueue { client.queue }
 
     var body: some View {
-        NavigationStack {
-            List {
-                if let error {
-                    Label(error, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.red)
-                }
+        switch style {
+        case .sheet: sheet
+        case .sidebar: sidebar
+        }
+    }
 
-                if let notice {
-                    Label(notice, systemImage: "checkmark.circle")
-                        .foregroundStyle(.secondary)
-                }
-
-                Section {
-                    ForEach(Array(queue.tracks.enumerated()), id: \.offset) { index, track in
-                        TrackRow(track: track, number: index + 1, isFirstPlay: track.isrc.map(unplayed.contains) ?? false)
-                            .contextMenu {
-                                Button("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") {
-                                    perform { try await queue.move(from: index, to: 0) }
-                                }
-                                .disabled(index == 0)
-                                Button("Remove", systemImage: "trash", role: .destructive) {
-                                    perform { try await queue.remove(at: index) }
-                                }
-                            }
-                            .swipeActions(edge: .trailing) {
-                                Button("Remove", systemImage: "trash", role: .destructive) {
-                                    perform { try await queue.remove(at: index) }
-                                }
-                            }
-                            .swipeActions(edge: .leading) {
-                                Button("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") {
-                                    perform { try await queue.move(from: index, to: 0) }
-                                }
-                                .tint(.accentColor)
-                            }
-                    }
-                    .onMove { offsets, destination in
-                        guard let from = offsets.first else { return }
-                        // SwiftUI counts the destination before the removal; the server after it.
-                        let target = destination > from ? destination - 1 : destination
-                        perform { try await queue.move(from: from, to: target) }
-                    }
-                    .dropDestination(for: SpotifyDrop.self) { drops, index in
-                        add(SpotifyDrop.items(in: drops), at: index)
-                    }
-                } footer: {
-                    if queue.total > queue.tracks.count {
-                        Text("Showing the first \(queue.tracks.count) of \(queue.total) tracks.")
-                    } else if client.isDJ {
-                        Text("The top track plays on your next turn.")
-                    }
-                }
-            }
-            .overlay {
-                if queue.isLoaded && queue.tracks.isEmpty {
-                    ContentUnavailableView {
-                        Label("Your Queue Is Empty", systemImage: "music.note.list")
-                    } description: {
-                        Text("Add tracks to play them when you DJ.")
-                    } actions: {
-                        Button("Add Tracks") { showsSearch = true }
-                    }
-                } else if !queue.isLoaded {
-                    ProgressView()
-                }
-            }
-            // Dropped anywhere else (say on an empty queue): the bottom.
-            .dropDestination(for: SpotifyDrop.self) { drops, _ in
-                add(SpotifyDrop.items(in: drops), at: nil)
-                return true
-            }
+    private var sidebar: some View {
+        list
             .navigationTitle("Your Queue")
-            .refreshable { perform { try await queue.reload() } }
-            // Always fresh: tracks can be added from the web app or the share sheet.
-            .task { perform { try await queue.reload() } }
-            .task(id: queue.tracks.compactMap(\.isrc)) {
-                unplayed = (try? await client.api.unplayed(isrcs: queue.tracks.compactMap(\.isrc))) ?? unplayed
-            }
-            #if os(iOS)
-            .navigationDestination(isPresented: $showsSearch) {
-                SearchView(client: client)
-            }
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Add Tracks", systemImage: "plus") { showsSearch = true }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    shuffleButton
-                }
-                ToolbarItem(placement: .topBarLeading) {
-                    EditButton()
-                }
-            }
-            #else
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 VStack(spacing: 0) {
                     Divider()
                     HStack {
-                        Button("Add Tracks…", systemImage: "plus") { showsSearch = true }
+                        Button("Add Tracks", systemImage: "plus") { showsSearch = true }
                         shuffleButton
-                        Text("or drag them in from Spotify")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .labelStyle(.iconOnly)
                         Spacer()
-                        Button("Done") { dismiss() }
-                            .keyboardShortcut(.defaultAction)
+                        #if os(iOS)
+                        EditButton()
+                        #endif
                     }
                     .padding(12)
                 }
@@ -132,11 +47,142 @@ struct QueueView: View {
             .sheet(isPresented: $showsSearch) {
                 SearchSheet(client: client)
             }
-            #endif
+    }
+
+    private var sheet: some View {
+        NavigationStack {
+            list
+                .navigationTitle("Your Queue")
+                #if os(iOS)
+                .navigationDestination(isPresented: $showsSearch) {
+                    SearchView(client: client)
+                }
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("Add Tracks", systemImage: "plus") { showsSearch = true }
+                    }
+                    ToolbarItem(placement: .primaryAction) {
+                        shuffleButton
+                    }
+                    ToolbarItem(placement: .topBarLeading) {
+                        EditButton()
+                    }
+                }
+                #else
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    VStack(spacing: 0) {
+                        Divider()
+                        HStack {
+                            Button("Add Tracks…", systemImage: "plus") { showsSearch = true }
+                            shuffleButton
+                            Text("or drag them in from Spotify")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Done") { dismiss() }
+                                .keyboardShortcut(.defaultAction)
+                        }
+                        .padding(12)
+                    }
+                    .background(.bar)
+                }
+                .sheet(isPresented: $showsSearch) {
+                    SearchSheet(client: client)
+                }
+                #endif
         }
         #if os(macOS)
         .frame(minWidth: 480, minHeight: 560)
         #endif
+    }
+
+    private var list: some View {
+        List {
+            if let error {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+            }
+
+            if let notice {
+                Label(notice, systemImage: "checkmark.circle")
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                ForEach(Array(queue.tracks.enumerated()), id: \.offset) { index, track in
+                    TrackRow(track: track, number: index + 1, isFirstPlay: track.isrc.map(unplayed.contains) ?? false)
+                        .contextMenu {
+                            Button("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") {
+                                perform { try await queue.move(from: index, to: 0) }
+                            }
+                            .disabled(index == 0)
+                            Button("Remove", systemImage: "trash", role: .destructive) {
+                                perform { try await queue.remove(at: index) }
+                            }
+                        }
+                        .swipeActions(edge: .trailing) {
+                            Button("Remove", systemImage: "trash", role: .destructive) {
+                                perform { try await queue.remove(at: index) }
+                            }
+                        }
+                        .swipeActions(edge: .leading) {
+                            Button("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") {
+                                perform { try await queue.move(from: index, to: 0) }
+                            }
+                            .tint(.accentColor)
+                        }
+                }
+                .onMove { offsets, destination in
+                    guard let from = offsets.first else { return }
+                    // SwiftUI counts the destination before the removal; the server after it.
+                    let target = destination > from ? destination - 1 : destination
+                    perform { try await queue.move(from: from, to: target) }
+                }
+                .dropDestination(for: SpotifyDrop.self) { drops, index in
+                    add(SpotifyDrop.items(in: drops), at: index)
+                }
+            } header: {
+                #if os(macOS)
+                // A Mac sidebar shows no title of its own.
+                if style == .sidebar {
+                    Text(queue.total > 0 ? "Your Queue (\(queue.total))" : "Your Queue")
+                }
+                #endif
+            } footer: {
+                if queue.total > queue.tracks.count {
+                    Text("Showing the first \(queue.tracks.count) of \(queue.total) tracks.")
+                } else if client.isDJ {
+                    Text("The top track plays on your next turn.")
+                }
+            }
+        }
+        .overlay {
+            if queue.isLoaded && queue.tracks.isEmpty {
+                ContentUnavailableView {
+                    Label("Your Queue Is Empty", systemImage: "music.note.list")
+                } description: {
+                    Text("Add tracks to play them when you DJ.")
+                } actions: {
+                    Button("Add Tracks") { showsSearch = true }
+                }
+            } else if !queue.isLoaded {
+                ProgressView()
+            }
+        }
+        // Dropped anywhere else (say on an empty queue): the bottom.
+        .dropDestination(for: SpotifyDrop.self) { drops, _ in
+            add(SpotifyDrop.items(in: drops), at: nil)
+            return true
+        }
+        .refreshable { perform { try await queue.reload() } }
+        // Always fresh: tracks can be added from the web app or the share sheet.
+        .task { perform { try await queue.reload() } }
+        .task(id: queue.tracks.compactMap(\.isrc)) {
+            unplayed = (try? await client.api.unplayed(isrcs: queue.tracks.compactMap(\.isrc))) ?? unplayed
+        }
     }
 
     private func add(_ items: [SpotifyItem], at position: Int?) {
