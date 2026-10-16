@@ -113,7 +113,11 @@ struct QueueView: View {
 
             Section {
                 ForEach(Array(queue.tracks.enumerated()), id: \.offset) { index, track in
-                    TrackRow(track: track, number: index + 1, isFirstPlay: track.isrc.map(unplayed.contains) ?? false)
+                    let playsAgo = client.playsAgo(track)
+                    TrackRow(track: track, number: index + 1, isFirstPlay: track.isrc.map(unplayed.contains) ?? false,
+                             playsAgo: playsAgo)
+                        // Just played in the channel: probably not one to play again soon.
+                        .listRowBackground(playsAgo != nil ? Color.orange.opacity(0.12) : nil)
                         .onAppear {
                             // Near the end of what's loaded: load the next 50.
                             if index >= queue.tracks.count - 10, queue.hasMore {

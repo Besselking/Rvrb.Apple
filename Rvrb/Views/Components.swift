@@ -23,6 +23,8 @@ struct TrackRow: View {
     let number: Int?
     /// Never played on RVRB: playing it earns a first play.
     var isFirstPlay = false
+    /// The channel played it this many tracks ago (0: playing now).
+    var playsAgo: Int? = nil
 
     var body: some View {
         HStack(spacing: 10) {
@@ -37,6 +39,16 @@ struct TrackRow: View {
                 Text(track.name)
                     .lineLimit(1)
                 HStack(spacing: 6) {
+                    if let playsAgo {
+                        HStack(spacing: 2) {
+                            Image(systemName: playsAgo == 0 ? "play.fill" : "clock")
+                            Text(playsAgo == 0 ? "Playing now" : playsAgo == 1 ? "1 play ago" : "\(playsAgo) plays ago")
+                        }
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.orange)
+                        .help("The channel just played this")
+                        .accessibilityElement(children: .combine)
+                    }
                     if isFirstPlay {
                         // An HStack, not a Label: a label's icon and title sit too far apart at this size.
                         HStack(spacing: 2) {

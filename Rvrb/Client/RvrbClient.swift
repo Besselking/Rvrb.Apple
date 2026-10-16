@@ -51,6 +51,53 @@ final class RvrbClient {
     @ObservationIgnored private var lastTyping: [String: Double] = [:]
     @ObservationIgnored private var sentTypingAt: Date = .distantPast
 
+    /// The tracks the joined channel played, newest first, for "n plays ago" in the queue.
+    private(set) var recentPlays: [PlayedTrack] = []
+
+    struct PlayedTrack: Equatable {
+        let id: String
+        let isrc: String?
+
+        init(_ track: Track) {
+            id = track.id
+            isrc = track.isrc
+        }
+
+        /// The same track, or another release of the same recording.
+        func matches(_ track: Track) -> Bool {
+            id == track.id || (isrc != nil && isrc == track.isrc)
+        }
+    }
+
+    /// How many tracks ago the channel played this one: 0 while it's playing, nil when not recently.
+    func playsAgo(_ track: Track) -> Int? {
+        guard channel != nil else { return nil }
+        if let playing = nowPlaying?.track, PlayedTrack(playing).matches(track) { return 0 }
+        return recentPlays.firstIndex { $0.matches(track) }.map { $0 + 1 }
+    }
+
+    /// A track finished (or was skipped): it's now one play ago.
+    private func recordPlayed(_ track: Track?) {
+        guard let track else { return }
+        let played = PlayedTrack(track)
+        guard recentPlays.first != played else { return }
+        recentPlays.insert(played, at: 0)
+        if recentPlays.count > 200 { recentPlays.removeLast(recentPlays.count - 200) }
+    }
+
+    private func loadPlayHistory(channelId: String) async {
+        do {
+            let history = try await api.channelHistory(channelId: channelId).compactMap { Track($0["track"]) }
+            guard channel?.id == channelId else { return }
+            var plays = history.map(PlayedTrack.init)
+            // The history may already hold the track that's playing.
+            if let playing = nowPlaying?.track, plays.first?.id == playing.id { plays.removeFirst() }
+            recentPlays = plays
+        } catch {
+            Log.app.error("Could not load the play history: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     /// The message the next one sent answers.
     var replyingTo: ChatMessage?
     /// A failed join, to show as an alert (the chat isn't on screen then).
@@ -285,6 +332,7 @@ final class RvrbClient {
         seen = []
         replyingTo = nil
         typingSince = [:]
+        recentPlays = []
         lastTyping = [:]
 
         do {
@@ -310,6 +358,7 @@ final class RvrbClient {
             addNotice(ChatText.parse(.string(greeting)).plain)
         }
 
+        Task { await loadPlayHistory(channelId: channel.id) }
         await loadBacklog(channelId: channel.id)
     }
 
@@ -326,6 +375,7 @@ final class RvrbClient {
     private func clearChannel() {
         replyingTo = nil
         typingSince = [:]
+        recentPlays = []
         lastTyping = [:]
         channel = nil
         isInRoom = false
@@ -365,6 +415,7 @@ final class RvrbClient {
                 do {
                     try await socket.request("join", ["channelId": .string(channel.id)])
                     isInRoom = true
+                    Task { await loadPlayHistory(channelId: channel.id) }
                     await loadBacklog(channelId: channel.id)
                 } catch {
                     addNotice("Could not rejoin \(channel.title): \(Self.describeJoinError(error))")
@@ -630,6 +681,9 @@ final class RvrbClient {
             if let list = p?["djs"]?.array { djIds = list.compactMap(\.string) }
 
         case "playChannelTrack":
+            if let previous = nowPlaying?.track, previous.id != p?["track"]?["id"]?.string {
+                recordPlayed(previous)
+            }
             setTrack(p)
 
             // Our answer to nextChannelTrack is playing: take it off the queue (the server doesn't).
@@ -647,6 +701,7 @@ final class RvrbClient {
             Task { await player.channelTrack(uri: uri, serverPlays: serverPlays) }
 
         case "pauseChannelTrack":
+            recordPlayed(nowPlaying?.track)
             nowPlaying = nil
             voters = [:]
             Task { await player.stop() }
