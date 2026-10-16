@@ -33,12 +33,12 @@ built="$derived/Build/Products/Release/Rvrb.app"
 
 # Quit through the app (not kill), so it can keep the DJ spot; wait until it has gone.
 if pgrep -f "$installed/Contents/MacOS/Rvrb" > /dev/null; then
-    echo "Quitting $installed…"
+    echo "Quitting ${installed}…"
     osascript -e "tell application \"$installed\" to quit"
     while pgrep -f "$installed/Contents/MacOS/Rvrb" > /dev/null; do sleep 0.5; done
 fi
 
-echo "Installing $installed…"
+echo "Installing ${installed}…"
 mkdir -p "$(dirname "$installed")"
 rm -rf "$installed"
 ditto "$built" "$installed"
