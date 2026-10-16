@@ -8,14 +8,18 @@ import Observation
 final class TrackQueue {
     /// The most the server returns per request.
     static let pageSize = 50
-    /// Pages loaded at most, to keep a very long queue from loading forever.
-    static let maxPages = 20
 
-    /// The tracks, top first: all of them, up to `maxPages` pages.
+    /// The tracks loaded so far, top first: a page of 50 at a time, more as the list is scrolled (`loadMore()`).
     private(set) var tracks: [Track] = []
-    /// All tracks, including any past `maxPages`.
+    /// All tracks, including those not loaded yet.
     private(set) var total = 0
     private(set) var isLoaded = false
+    private(set) var isLoadingMore = false
+
+    var hasMore: Bool { tracks.count < total }
+
+    /// Pages loaded; a reload after a change loads as many again, so the list doesn't shrink under the user.
+    @ObservationIgnored private var loadedPages = 1
 
     var next: Track? { tracks.first }
 
@@ -25,6 +29,22 @@ final class TrackQueue {
 
     init(api: RvrbAPI) {
         self.api = api
+    }
+
+    /// Loads the next page, when there is one.
+    func loadMore() async throws {
+        guard hasMore, !isLoadingMore else { return }
+        isLoadingMore = true
+        defer { isLoadingMore = false }
+
+        try await serialized {
+            guard self.hasMore else { return }
+            let page = try await self.api.stack(id: try await self.resolveStackId(), page: self.loadedPages,
+                                                limit: Self.pageSize)
+            self.tracks += (page["tracks"]?.array ?? []).compactMap(Track.init)
+            self.total = page["totalItems"]?.int ?? self.tracks.count
+            self.loadedPages += 1
+        }
     }
 
     func reload() async throws {
@@ -93,22 +113,25 @@ final class TrackQueue {
         try await task.value
     }
 
-    /// Loads the whole queue, a page of 50 at a time.
+    /// Loads the pages loaded so far again (at least the first).
     private func reloadNow() async throws {
         let stackId = try await resolveStackId()
         var loaded: [Track] = []
         var count = 0
+        var pages = 0
 
-        for page in 0..<Self.maxPages {
+        for page in 0..<max(1, loadedPages) {
             let result = try await api.stack(id: stackId, page: page, limit: Self.pageSize)
             let pageTracks = (result["tracks"]?.array ?? []).compactMap(Track.init)
             loaded += pageTracks
             count = result["totalItems"]?.int ?? loaded.count
+            pages = page + 1
             if pageTracks.count < Self.pageSize || loaded.count >= count { break }
         }
 
         tracks = loaded
         total = count
+        loadedPages = pages
         isLoaded = true
     }
 

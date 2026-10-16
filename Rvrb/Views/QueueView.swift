@@ -114,6 +114,12 @@ struct QueueView: View {
             Section {
                 ForEach(Array(queue.tracks.enumerated()), id: \.offset) { index, track in
                     TrackRow(track: track, number: index + 1, isFirstPlay: track.isrc.map(unplayed.contains) ?? false)
+                        .onAppear {
+                            // Near the end of what's loaded: load the next 50.
+                            if index >= queue.tracks.count - 10, queue.hasMore {
+                                perform { try await queue.loadMore() }
+                            }
+                        }
                         .contextMenu {
                             Button("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") {
                                 perform { try await queue.move(from: index, to: 0) }
@@ -152,9 +158,11 @@ struct QueueView: View {
                 }
                 #endif
             } footer: {
-                if queue.total > queue.tracks.count {
-                    // Only past TrackQueue.maxPages pages.
-                    Text("Showing the first \(queue.tracks.count) of \(queue.total) tracks.")
+                if queue.hasMore {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("\(queue.total - queue.tracks.count) more tracks")
+                    }
                 } else if client.isDJ {
                     Text("The top track plays on your next turn.")
                 }
