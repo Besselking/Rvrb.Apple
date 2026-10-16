@@ -77,8 +77,11 @@ struct NowPlayingView: View {
             if let web { openURL(web) }
             return
         }
-        openURL(uri) { opened in
-            if !opened, let web { openURL(web) }
+        // The completion runs off the main thread on the Mac: a closure tied to the main actor traps there.
+        let openURL = openURL
+        openURL(uri) { @Sendable opened in
+            guard !opened, let web else { return }
+            Task { @MainActor in openURL(web) }
         }
     }
 
