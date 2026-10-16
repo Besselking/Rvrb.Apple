@@ -115,21 +115,30 @@ private struct PersonRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Avatar(name: name, url: url, seed: seed, activity: activity, starred: starred, size: 34)
-            Text(name)
-                .fontWeight(isMe ? .semibold : .regular)
-                .lineLimit(1)
-            if isBot {
-                BotTag()
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .fontWeight(isMe ? .semibold : .regular)
+                    .lineLimit(1)
+                // The tags go under the name, so neither cuts the other off in a narrow column.
+                if isBot || role != nil || isMe {
+                    HStack(spacing: 6) {
+                        if isBot {
+                            BotTag()
+                        }
+                        if let role {
+                            RoleTag(role: role)
+                        }
+                        if isMe {
+                            Text("You")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .lineLimit(1)
+                }
             }
-            if let role {
-                RoleTag(role: role)
-            }
-            if isMe {
-                Text("You")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
+            .layoutPriority(1)
+            Spacer(minLength: 4)
             if let detail {
                 Text(detail)
                     .font(.caption)
