@@ -673,6 +673,10 @@ final class RvrbClient {
             add(p, live: true)
 
         case "updateChannel":
+            // Edited, a role changed, or someone was banned: keep its details (roles…) current.
+            if let updated = Channel(p?["channel"]), updated.id == channel?.id {
+                channel = updated
+            }
             // After an edit it carries the channel's bot.
             if let bot = p?["bot"], bot.object?.isEmpty == false, let channel {
                 setChannelBot(bot)
@@ -924,9 +928,23 @@ final class RvrbClient {
 
     /// A moderator, admin or creator of the joined channel (its `roles`).
     var isModerator: Bool {
-        guard let roles = channel?.json["roles"] else { return false }
-        return ["mods", "admins", "creators"].contains { key in
-            (roles[key]?.array ?? []).contains { $0.string == me.id }
+        role(of: me.id) != nil
+    }
+
+    func role(of userId: String) -> ChannelRole? {
+        channel?.role(of: userId)
+    }
+
+    /// Moderators and up reorder the waiting DJs; the one playing stays first.
+    func reorderDJs(_ order: [String]) async {
+        guard let channel, isModerator, order.first == djIds.first, Set(order) == Set(djIds) else { return }
+        let previous = djIds
+        djIds = order
+        do {
+            try await api.reorderDJs(channelId: channel.id, djs: order)
+        } catch {
+            if djIds == order { djIds = previous }
+            addNotice("Could not reorder the DJs: \(error.localizedDescription)")
         }
     }
 

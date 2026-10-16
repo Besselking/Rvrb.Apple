@@ -120,6 +120,41 @@ struct ChannelUser: Identifiable, Hashable {
     }
 }
 
+/// A role in a channel, highest first (the channel's `roles` lists ids per role).
+enum ChannelRole: Int, Comparable {
+    case mod = 3, admin = 5, creator = 10
+
+    var title: String {
+        switch self {
+        case .creator: "Creator"
+        case .admin: "Admin"
+        case .mod: "Mod"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .creator: "crown.fill"
+        case .admin: "shield.lefthalf.filled"
+        case .mod: "checkmark.shield"
+        }
+    }
+
+    static func < (lhs: ChannelRole, rhs: ChannelRole) -> Bool { lhs.rawValue < rhs.rawValue }
+}
+
+extension Channel {
+    /// A user's highest role here, if any.
+    func role(of userId: String) -> ChannelRole? {
+        let roles = json["roles"]
+        func listed(_ key: String) -> Bool { (roles?[key]?.array ?? []).contains { $0.string == userId } }
+        if listed("creators") { return .creator }
+        if listed("admins") { return .admin }
+        if listed("mods") { return .mod }
+        return nil
+    }
+}
+
 /// A chat command (typed as `/name` or `!name`), from the channel's bot options.
 struct BotCommand: Identifiable, Hashable {
     let name: String

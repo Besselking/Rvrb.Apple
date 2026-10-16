@@ -119,6 +119,11 @@ final class RvrbAPI {
         try await get("api/channel/\(Self.escape(channelId))/history")["history"]?.array ?? []
     }
 
+    /// `PUT /api/channel/{id}/djs`: the DJs in a new order (moderators and up).
+    func reorderDJs(channelId: String, djs: [String]) async throws {
+        _ = try await send("PUT", "api/channel/\(Self.escape(channelId))/djs", body: ["djs": .array(djs.map(JSON.string))])
+    }
+
     /// `POST /api/channel/{id}/skip`: skips the playing track; for its DJ, or a moderator and up.
     func skip(channelId: String) async throws {
         _ = try await send("POST", "api/channel/\(Self.escape(channelId))/skip")
