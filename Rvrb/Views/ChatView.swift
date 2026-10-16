@@ -19,8 +19,9 @@ struct ChatView: View {
 
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(messages.indices, id: \.self) { index in
-                    let message = messages[index]
+                // By message, not position: trimming old messages or sorting in the history shifts every
+                // position, and a lazy stack that mixes rows up leaves blank stretches.
+                ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
                     let userId = message.userId ?? ""
                     MessageRow(message: message,
                                showsHeader: showsHeader(messages, at: index),
@@ -405,16 +406,27 @@ private struct Grabbable: ViewModifier {
     let center: CGPoint
     let side: CGFloat
 
+    /// True while the mouse is down on it. A gesture state resets when the gesture is cancelled too (onEnded
+    /// doesn't run then), so a hold always ends, and the spinning overlay never stays over the chat.
+    @GestureState private var pressing = false
+
     func body(content: Content) -> some View {
         if let grab {
             let holding = grab.holder == id
             content
                 .pointerStyle(holding ? .grabActive : .grabIdle)
                 .gesture(DragGesture(minimumDistance: 0)
+                    .updating($pressing) { _, pressing, _ in pressing = true }
                     .onChanged { _ in
                         if !grab.isHeld { grab.grab(id, center: center, side: side) }
-                    }
-                    .onEnded { _ in grab.release() })
+                    })
+                .onChange(of: pressing) { _, pressed in
+                    if !pressed, grab.holder == id { grab.release() }
+                }
+                // The row went away mid-hold (the list reloaded): let go.
+                .onDisappear {
+                    if grab.holder == id { grab.release() }
+                }
         } else {
             content
         }
