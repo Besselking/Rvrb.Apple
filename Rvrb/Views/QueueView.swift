@@ -114,10 +114,13 @@ struct QueueView: View {
             Section {
                 ForEach(Array(queue.tracks.enumerated()), id: \.offset) { index, track in
                     let playsAgo = client.playsAgo(track)
+                    // Playing now on someone else's turn: they "sniped" it.
+                    let sniper = playsAgo == 0 ? client.djIds.first.flatMap { $0 == client.me.id ? nil : client.name(for: $0) } : nil
                     TrackRow(track: track, number: index + 1, isFirstPlay: track.isrc.map(unplayed.contains) ?? false,
-                             playsAgo: playsAgo)
-                        // Just played in the channel: probably not one to play again soon.
-                        .listRowBackground(playsAgo != nil ? Color.orange.opacity(0.12) : nil)
+                             playsAgo: playsAgo, playingBy: sniper)
+                        // Playing now, or just played in the channel: probably not one to play again soon.
+                        .listRowBackground(playsAgo == 0 ? Color.accentColor.opacity(0.16)
+                                           : playsAgo != nil ? Color.orange.opacity(0.12) : nil)
                         .onAppear {
                             // Near the end of what's loaded: load the next 50.
                             if index >= queue.tracks.count - 10, queue.hasMore {

@@ -25,6 +25,8 @@ struct TrackRow: View {
     var isFirstPlay = false
     /// The channel played it this many tracks ago (0: playing now).
     var playsAgo: Int? = nil
+    /// Who's playing it now, when it's someone else (it was "sniped" from this queue).
+    var playingBy: String? = nil
 
     var body: some View {
         HStack(spacing: 10) {
@@ -39,10 +41,20 @@ struct TrackRow: View {
                 Text(track.name)
                     .lineLimit(1)
                 HStack(spacing: 6) {
-                    if let playsAgo {
+                    if playsAgo == 0 {
                         HStack(spacing: 2) {
-                            Image(systemName: playsAgo == 0 ? "play.fill" : "clock")
-                            Text(playsAgo == 0 ? "Playing now" : playsAgo == 1 ? "1 play ago" : "\(playsAgo) plays ago")
+                            Image(systemName: "play.fill")
+                            Text(playingBy.map { "Playing now · \($0)" } ?? "Playing now")
+                        }
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.tint)
+                        .lineLimit(1)
+                        .help(playingBy.map { "\($0) is playing this right now" } ?? "Playing right now")
+                        .accessibilityElement(children: .combine)
+                    } else if let playsAgo {
+                        HStack(spacing: 2) {
+                            Image(systemName: "clock")
+                            Text(playsAgo == 1 ? "1 play ago" : "\(playsAgo) plays ago")
                         }
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.orange)
