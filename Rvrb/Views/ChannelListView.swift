@@ -77,7 +77,12 @@ struct ChannelListView: View {
             .padding(.vertical, 8)
         }
         .navigationTitle("Channels")
+        #if os(macOS)
+        // In the sidebar itself, so it collapses with it (the default is the window's toolbar).
+        .searchable(text: $query, placement: .sidebar, prompt: "Search channels")
+        #else
         .searchable(text: $query, prompt: "Search channels")
+        #endif
         .task(id: "\(list.rawValue)|\(query)") {
             if !query.isEmpty {
                 try? await Task.sleep(for: .milliseconds(350))
