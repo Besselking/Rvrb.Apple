@@ -61,7 +61,10 @@ struct MainView: View {
         .onChange(of: scenePhase) { _, phase in
             client.setHidden(phase == .background)
             // Tracks may have been added elsewhere meanwhile (the web app, the share sheet).
-            if phase == .active { Task { await client.loadQueue() } }
+            if phase == .active {
+                Task { await client.loadQueue() }
+                client.becameActive()
+            }
         }
         .alert("Couldn't Join", isPresented: Binding(get: { client.joinError != nil }, set: { if !$0 { client.joinError = nil } })) {
             Button("OK") {}

@@ -65,6 +65,7 @@ final class RvrbClient {
     /// "@name" mentions to highlight: the display name and the username.
     @ObservationIgnored private let mentions: [String]
     @ObservationIgnored private var isHidden = RvrbClient.launchedInBackground
+    @ObservationIgnored private let notifier = MentionNotifier()
     #if os(iOS)
     @ObservationIgnored private(set) var liveActivity: LiveActivityController!
     @ObservationIgnored private let backgroundGrace = BackgroundGrace(name: "Keep the RVRB connection")
@@ -570,7 +571,7 @@ final class RvrbClient {
                                   avatarURL: RvrbAPI.imageURL(m["image"]), syncTime: syncTime, replyTo: replyTo)
 
         // The backlog loaded on join doesn't call for attention, only live messages do.
-        if live && mentionsMe { requestAttention() }
+        if live && mentionsMe { requestAttention(for: message) }
 
         append(message)
     }
@@ -582,10 +583,20 @@ final class RvrbClient {
         }
     }
 
-    private func requestAttention() {
+    /// A notification while the app isn't in front; in front, the highlighted message is enough.
+    private func requestAttention(for message: ChatMessage) {
         #if os(macOS)
-        if !NSApp.isActive { NSApp.requestUserAttention(.informationalRequest) }
+        let inFront = NSApp.isActive
+        #else
+        let inFront = UIApplication.shared.applicationState == .active
         #endif
+        guard !inFront, let channel else { return }
+        notifier.notify(message, in: channel.title)
+    }
+
+    /// The app came to the front.
+    func becameActive() {
+        notifier.clearDelivered()
     }
 
     // MARK: Notifications

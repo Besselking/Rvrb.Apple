@@ -49,6 +49,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         true
     }
 
+    /// Back in front (switching apps doesn't change the scene's phase on the Mac): clear the mention notifications.
+    func applicationDidBecomeActive(_ notification: Notification) {
+        model?.client?.becameActive()
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let model, model.client?.channel != nil else { return .terminateNow }
 
