@@ -267,6 +267,22 @@ struct SearchView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(added.contains(track.id) || adding.contains(track.id))
+                .contextMenu {
+                    Button("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") {
+                        add(track, next: true)
+                    }
+                    Button("Add to Queue", systemImage: "text.badge.plus") { add(track) }
+                }
+                .swipeActions(edge: .leading) {
+                    Button("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") {
+                        add(track, next: true)
+                    }
+                    .tint(.accentColor)
+                }
+                .swipeActions(edge: .trailing) {
+                    Button("Add to Queue", systemImage: "text.badge.plus") { add(track) }
+                        .tint(.green)
+                }
             }
         }
         .overlay {
@@ -275,7 +291,7 @@ struct SearchView: View {
                     ProgressView()
                 } else if query.isEmpty {
                     ContentUnavailableView("Search Spotify", systemImage: "magnifyingglass",
-                                           description: Text("Tracks you pick go to the bottom of your queue."))
+                                           description: Text(Self.hint))
                 } else if error == nil {
                     ContentUnavailableView.search(text: query)
                 }
@@ -318,13 +334,27 @@ struct SearchView: View {
         }
     }
 
-    private func add(_ track: Track) {
+    /// How to add, per platform.
+    private static var hint: String {
+        #if os(macOS)
+        "Click a track to add it to the bottom of your queue, or right-click it to play it next."
+        #else
+        "Tap a track to add it to the bottom of your queue. Swipe right or touch and hold it to play it next."
+        #endif
+    }
+
+    /// Adds at the bottom of the queue, or with `next` at the top (it plays on the next turn).
+    private func add(_ track: Track, next: Bool = false) {
         adding.insert(track.id)
 
         Task {
             defer { adding.remove(track.id) }
             do {
-                try await client.queue.append([track.id])
+                if next {
+                    try await client.queue.insert([.track(id: track.id)], at: 0)
+                } else {
+                    try await client.queue.append([track.id])
+                }
                 added.insert(track.id)
                 error = nil
             } catch {
