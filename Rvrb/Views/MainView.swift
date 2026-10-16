@@ -54,6 +54,10 @@ struct MainView: View {
         .onChange(of: selection) { _, channel in
             if let channel { Task { await client.join(channel) } }
         }
+        .onChange(of: client.channel?.id) { _, id in
+            // Joined without the list (rejoining on launch): show the room on iPhone too.
+            if id != nil, id != selection?.id { selection = client.channel }
+        }
         .onChange(of: client.channel == nil && client.joining == nil) { _, left in
             // Left, refused, or removed from the channel: go back to the list.
             if left { selection = nil }

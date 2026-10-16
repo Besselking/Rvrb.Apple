@@ -97,6 +97,7 @@ final class AppModel {
     /// Leaves the channel and forgets the token on this device only. `GET /api/logout` isn't called: it would close
     /// the user's other clients too (e.g. the browser).
     func logOut() async {
+        client?.forgetLastChannel()
         await client?.shutdown()
         session.forget()
         phase = .loggedOut

@@ -149,12 +149,7 @@ final class RvrbClient {
         liveActivity.start()
         #endif
         socket.start()
-        // Quit while DJing: back to the channel, on the connection the server kept.
-        if let saved = UserDefaults.standard.dictionary(forKey: Self.resumeKey) as? [String: String],
-           let channel = Channel(["_id": .string(saved["id"] ?? ""), "title": .string(saved["title"] ?? "")]) {
-            UserDefaults.standard.removeObject(forKey: Self.resumeKey)
-            Task { await join(channel) }
-        }
+        Task { await rejoinLastChannel() }
         Task { await loadQueue() }
         Task { await loadFollowed() }
         Task { await loadSocial() }
@@ -228,26 +223,42 @@ final class RvrbClient {
     }
 
     /// Stops playback and leaves the channel (send `leave` on exit: without it the account stays in the channel).
+    /// The channel is still the one to rejoin next launch.
     func shutdown() async {
-        await leave()
+        await leave(remember: true)
         socket.stop()
     }
 
-    /// The channel to rejoin on the next launch of this copy of the app.
-    private static var resumeKey: String { "resumeChannel:" + Bundle.main.bundlePath }
+    /// The channel joined last, rejoined on launch until the user leaves it (Leave Channel) or logs out.
+    private static let lastChannelKey = "lastChannel"
 
     /// Quitting the app. On the decks, the spot is kept: the server is told this is a hidden mobile client, which
     /// it keeps for an hour after the socket closes and serves its turns for, and the next launch resumes the
     /// connection (same client id) and the channel. Otherwise it leaves, as before.
     func quit() async {
-        guard let channel, isDJ, socket.isReady else {
+        guard channel != nil, isDJ, socket.isReady else {
             await shutdown()
             return
         }
 
-        UserDefaults.standard.set(["id": channel.id, "title": channel.title], forKey: Self.resumeKey)
         try? await socket.notify("appState", ["hidden": true, "mobile": true])
         socket.stop()
+    }
+
+    /// Back into the channel joined last, fetched again for its details (greeting, roles…).
+    private func rejoinLastChannel() async {
+        guard let saved = UserDefaults.standard.dictionary(forKey: Self.lastChannelKey) as? [String: String],
+              let id = saved["id"], !id.isEmpty else { return }
+
+        let fetched = try? await api.channel(id: id)
+        guard let channel = fetched ?? Channel(["_id": .string(id), "title": .string(saved["title"] ?? "")]),
+              self.channel == nil, joining == nil else { return }
+        await join(channel)
+    }
+
+    /// Logging out: don't rejoin as the next account.
+    func forgetLastChannel() {
+        UserDefaults.standard.removeObject(forKey: Self.lastChannelKey)
     }
 
     // MARK: People
@@ -352,6 +363,7 @@ final class RvrbClient {
         joining = nil
         self.channel = channel
         isInRoom = true
+        UserDefaults.standard.set(["id": channel.id, "title": channel.title], forKey: Self.lastChannelKey)
         Task { await loadChannelBot(channelId: channel.id) }
 
         if let greeting = channel.greeting {
@@ -362,9 +374,11 @@ final class RvrbClient {
         await loadBacklog(channelId: channel.id)
     }
 
-    func leave() async {
+    /// Leaves the channel. `remember`: still rejoin it next launch (quitting); otherwise the user left it.
+    func leave(remember: Bool = false) async {
         pendingJoin = nil
         joining = nil
+        if !remember { forgetLastChannel() }
         guard channel != nil else { return }
 
         await player.stop()
@@ -729,6 +743,8 @@ final class RvrbClient {
         case "leaveChannel":
             if let channel, p?["channelId"]?.string == channel.id {
                 addNotice("You are no longer in \(channel.title).")
+                // Removed (kicked, say): don't walk back in on the next launch.
+                forgetLastChannel()
                 clearChannel()
                 Task { await player.stop() }
             }
