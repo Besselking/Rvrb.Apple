@@ -236,7 +236,7 @@ private struct ChatImageView: View {
                     picture.rotationEffect(.degrees(angle(at: context.date)))
                 }
                 #if os(macOS)
-                .modifier(Grabbable(grab: grab, id: id, center: center, angle: { angle(at: .now) }))
+                .modifier(Grabbable(grab: grab, id: id, center: center, side: side))
                 #endif
             } else {
                 picture
@@ -244,17 +244,14 @@ private struct ChatImageView: View {
         }
         .frame(height: side)
         .onGeometryChange(for: CGPoint.self) { proxy in
-            let frame = proxy.frame(in: .named(SpinGrab.coordinateSpace))
+            let frame = proxy.frame(in: .global)
             return CGPoint(x: frame.midX, y: frame.midY)
         } action: { center = $0 }
     }
 
-    /// One turn a second; held (easter egg), it keeps its angle on screen while the window turns around it.
+    /// One turn a second.
     private func angle(at date: Date) -> Double {
-        if let grab, grab.isHeld, grab.holder == id {
-            return grab.frozenAngle - grab.windowAngle(at: date)
-        }
-        return date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1) * 360
+        date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1) * 360
     }
 
     @ViewBuilder
@@ -404,7 +401,7 @@ private struct Grabbable: ViewModifier {
     let grab: SpinGrab?
     let id: UUID
     let center: CGPoint
-    let angle: () -> Double
+    let side: CGFloat
 
     func body(content: Content) -> some View {
         if let grab {
@@ -413,7 +410,7 @@ private struct Grabbable: ViewModifier {
                 .pointerStyle(holding ? .grabActive : .grabIdle)
                 .gesture(DragGesture(minimumDistance: 0)
                     .onChanged { _ in
-                        if !grab.isHeld { grab.grab(id, center: center, imageAngle: angle()) }
+                        if !grab.isHeld { grab.grab(id, center: center, side: side) }
                     }
                     .onEnded { _ in grab.release() })
         } else {
