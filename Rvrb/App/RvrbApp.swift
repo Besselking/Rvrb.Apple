@@ -7,6 +7,7 @@ struct RvrbApp: App {
     #endif
 
     @State private var model = AppModel.shared
+    @State private var spinGrab = SpinGrab()
 
     init() {
         #if os(iOS)
@@ -20,6 +21,8 @@ struct RvrbApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
+                .environment(spinGrab)
+                .modifier(SpinGrabWindow(grab: spinGrab))
                 .task {
                     #if os(macOS)
                     appDelegate.model = model

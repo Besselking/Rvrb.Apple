@@ -201,6 +201,11 @@ private struct ChatImageView: View {
     var style = ChatText.ImageStyle()
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(SpinGrab.self) private var grab: SpinGrab?
+    /// This image's identity for the grab easter egg.
+    @State private var id = UUID()
+    /// Its centre in the window, where the window turns when it's held.
+    @State private var center: CGPoint = .zero
 
     var body: some View {
         if style.circular || style.spins {
@@ -228,14 +233,28 @@ private struct ChatImageView: View {
         return Group {
             if style.spins && !reduceMotion {
                 TimelineView(.animation) { context in
-                    let turn = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1)
-                    picture.rotationEffect(.degrees(turn * 360))
+                    picture.rotationEffect(.degrees(angle(at: context.date)))
                 }
+                #if os(macOS)
+                .modifier(Grabbable(grab: grab, id: id, center: center, angle: { angle(at: .now) }))
+                #endif
             } else {
                 picture
             }
         }
         .frame(height: side)
+        .onGeometryChange(for: CGPoint.self) { proxy in
+            let frame = proxy.frame(in: .named(SpinGrab.coordinateSpace))
+            return CGPoint(x: frame.midX, y: frame.midY)
+        } action: { center = $0 }
+    }
+
+    /// One turn a second; held (easter egg), it keeps its angle on screen while the window turns around it.
+    private func angle(at date: Date) -> Double {
+        if let grab, grab.isHeld, grab.holder == id {
+            return grab.frozenAngle - grab.windowAngle(at: date)
+        }
+        return date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1) * 360
     }
 
     @ViewBuilder
@@ -374,6 +393,31 @@ private struct ScrollsToTopDisabled: UIViewRepresentable {
                 }
                 view = current.superview
             }
+        }
+    }
+}
+#endif
+
+#if os(macOS)
+/// The easter egg's hand: open over a spinning image, closed while holding it (and the window spins instead).
+private struct Grabbable: ViewModifier {
+    let grab: SpinGrab?
+    let id: UUID
+    let center: CGPoint
+    let angle: () -> Double
+
+    func body(content: Content) -> some View {
+        if let grab {
+            let holding = grab.holder == id
+            content
+                .pointerStyle(holding ? .grabActive : .grabIdle)
+                .gesture(DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        if !grab.isHeld { grab.grab(id, center: center, imageAngle: angle()) }
+                    }
+                    .onEnded { _ in grab.release() })
+        } else {
+            content
         }
     }
 }
