@@ -75,6 +75,34 @@ struct MainView: View {
         } message: {
             Text(client.joinError ?? "")
         }
+        .modifier(PasswordPrompt(client: client))
+    }
+}
+
+/// Asks for a private channel's password, and joins with it.
+private struct PasswordPrompt: ViewModifier {
+    let client: RvrbClient
+    @State private var password = ""
+
+    func body(content: Content) -> some View {
+        let request = client.passwordRequest
+        content
+            .alert(request?.wrongPassword == true ? "Wrong Password" : "Password Required",
+                   isPresented: Binding(get: { request != nil }, set: { if !$0 { client.passwordRequest = nil } }),
+                   presenting: request) { request in
+                SecureField("Password", text: $password)
+                Button("Join") {
+                    let entered = password
+                    password = ""
+                    Task { await client.join(request.channel, password: entered) }
+                }
+                .disabled(password.isEmpty)
+                Button("Cancel", role: .cancel) { password = "" }
+            } message: { request in
+                Text(request.wrongPassword
+                     ? "That isn't the password of \(request.channel.title). Try again."
+                     : "\(request.channel.title) is private. Enter its password to join.")
+            }
     }
 }
 

@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 import WebKit
 
 /// Login state: checks the saved token at launch and creates the client once it's valid.
@@ -19,6 +20,10 @@ final class AppModel {
     let session = Session()
 
     init() {
+        session.onLoginLost = { [weak self] message in
+            Task { await self?.loginLost(message) }
+        }
+
         // The share extension added tracks: reload the queue if the app is running.
         CFNotificationCenterAddObserver(
             CFNotificationCenterGetDarwinNotifyCenter(), nil,
@@ -98,9 +103,23 @@ final class AppModel {
     /// the user's other clients too (e.g. the browser).
     func logOut() async {
         client?.forgetLastChannel()
-        await client?.shutdown()
+        await endSession()
+    }
+
+    /// Spotify refused the session (revoked, or another account's): back to the login, which shows why. The channel
+    /// is still rejoined after logging in again.
+    private func loginLost(_ message: String) async {
+        guard client != nil else { return }
+        Log.app.error("Login lost: \(message, privacy: .public)")
+        await endSession()
+        loginMessage = message
+    }
+
+    private func endSession() async {
+        let client = client
         session.forget()
         phase = .loggedOut
+        await client?.shutdown()
 
         // Forget the Spotify and RVRB web logins too, so another account can log in.
         let store = WKWebsiteDataStore.default()

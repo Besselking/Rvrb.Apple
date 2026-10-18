@@ -229,6 +229,7 @@ final class RvrbSocket {
             if let error = message["error"] {
                 applyUpdateToken(error)
                 let text = error["message"]?.string ?? error.string ?? error.text
+                if RvrbError.endsSpotifyLogin(text) { session.loginLost(text) }
                 resolve(id, with: .failure(RvrbError.server(text)))
             } else {
                 let result = message["result"] ?? .null

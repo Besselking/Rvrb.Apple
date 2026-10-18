@@ -11,6 +11,13 @@ enum RvrbError: LocalizedError {
         case .server(let message): message
         }
     }
+
+    /// Spotify no longer accepts the session (`SPOTIFY_TOKEN_REVOKED`), or it now belongs to another Spotify account
+    /// (`SPOTIFY_ACCOUNT_MISMATCH`): the server can't play for the user until they log in again.
+    nonisolated static func endsSpotifyLogin(_ message: String) -> Bool {
+        message.contains("SPOTIFY_TOKEN_REVOKED") || message.contains("SPOTIFY_ACCOUNT_MISMATCH")
+            || message.hasSuffix("Log in again.")
+    }
 }
 
 /// The REST routes the client needs (https://app.rvrb.one/api-docs/openapi.yaml).
@@ -284,6 +291,10 @@ final class RvrbAPI {
         guard (200..<300).contains(status) else {
             // Error bodies are `{ error }` or plain text.
             let message = (try? JSON(parsing: data))?["error"]?.string ?? text
+            if RvrbError.endsSpotifyLogin(message) {
+                session.loginLost(message)
+                throw RvrbError.unauthorized(message)
+            }
             throw RvrbError.server("\(status): \(message.isEmpty ? HTTPURLResponse.localizedString(forStatusCode: status) : message)")
         }
 

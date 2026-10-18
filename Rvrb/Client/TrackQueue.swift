@@ -3,7 +3,8 @@ import Observation
 
 /// The user's DJ queue: the stack marked `activeQueue` (created when there is none). While the user DJs, the server
 /// asks for the next track (`nextChannelTrack`); the client answers with the top and takes it off once it plays,
-/// because the server doesn't. The queue is kept in memory so that question can be answered within 2.5 s.
+/// unless the server already has (it says so with `refreshDjStack`). The queue is kept in memory so that question
+/// can be answered within 2.5 s.
 @Observable
 final class TrackQueue {
     /// The most the server returns per request.
@@ -80,10 +81,12 @@ final class TrackQueue {
 
     /// Takes a track that just started playing off the top. Reloads first and only removes the top if it is still
     /// that track, so a track someone else already removed isn't followed by the wrong one.
-    func removePlayed(trackId: String) async throws {
+    /// `queueLength` is the length when the track was handed to the server: a shorter queue means the server took
+    /// it off already, and removing the top would take the next track too (the same song queued twice in a row).
+    func removePlayed(trackId: String, queueLength: Int) async throws {
         try await serialized {
             try await self.reloadNow()
-            guard self.next?.id == trackId else { return }
+            guard self.next?.id == trackId, self.total >= queueLength else { return }
             try await self.api.removeTrack(stackId: try await self.resolveStackId(), at: 0)
             try await self.reloadNow()
         }

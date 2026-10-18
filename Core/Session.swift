@@ -9,6 +9,8 @@ import Security
 @Observable
 final class Session {
     private(set) var token: String?
+    /// The server says the login is no good any more (see `RvrbError.endsSpotifyLogin`), with its message.
+    @ObservationIgnored var onLoginLost: ((String) -> Void)?
 
     init() {
         // RVRB_TOKEN in the scheme's environment wins, for development.
@@ -29,6 +31,10 @@ final class Session {
     /// before that group existed).
     func persist() {
         if let token { Keychain.write(token) }
+    }
+
+    func loginLost(_ message: String) {
+        onLoginLost?(message)
     }
 
     func forget() {

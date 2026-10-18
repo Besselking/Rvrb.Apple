@@ -102,12 +102,15 @@ final class RvrbClient {
     var replyingTo: ChatMessage?
     /// A failed join, to show as an alert (the chat isn't on screen then).
     var joinError: String?
+    /// A channel that needs a password to join, to ask for one.
+    var passwordRequest: PasswordRequest?
 
     @ObservationIgnored private var seen: Set<String> = []
     private var names: [String: String] = [:]
     @ObservationIgnored private var pendingJoin: Channel?
-    /// The track this client last gave the server for its turn; taken off the queue once it starts playing.
-    @ObservationIgnored private var answeredTrackId: String?
+    /// The track this client last gave the server for its turn, and the queue's length then; taken off the queue
+    /// once it starts playing, unless the server already did.
+    @ObservationIgnored private var answered: (trackId: String, queueLength: Int)?
     @ObservationIgnored private var starredPlaylist: String?
     /// "@name" mentions to highlight: the display name and the username.
     @ObservationIgnored private let mentions: [String]
@@ -198,7 +201,7 @@ final class RvrbClient {
 
     /// Whether a user has a profile to show: not RVRB itself or the channel's own bot.
     func hasProfile(_ userId: String) -> Bool {
-        !userId.isEmpty && userId != "server" && !channelBotIds.contains(userId)
+        !userId.isEmpty && userId != "server" && !channelBotIds.contains(userId) && !userId.hasPrefix(Self.blockedUserId)
     }
 
     /// The full followed list, loaded by the channel list.
@@ -313,7 +316,8 @@ final class RvrbClient {
 
     // MARK: Joining
 
-    func join(_ channel: Channel) async {
+    /// `password`: for a private channel that has one (its creator needs none).
+    func join(_ channel: Channel, password: String? = nil) async {
         guard channel.id != self.channel?.id, channel.id != joining?.id else { return }
 
         joining = channel
@@ -352,10 +356,17 @@ final class RvrbClient {
                 await player.stop()
                 _ = try? await socket.request("leave")
             }
-            try await socket.request("join", ["channelId": .string(channel.id)])
+            var params: [String: JSON] = ["channelId": .string(channel.id)]
+            if let password { params["password"] = .string(password) }
+            try await socket.request("join", .object(params))
         } catch {
             if joining?.id == channel.id { joining = nil }
-            joinError = "Could not join \(channel.title): \(Self.describeJoinError(error))"
+            let (code, reason) = Self.describeJoinError(error)
+            switch code {
+            case "PR": passwordRequest = PasswordRequest(channel: channel, wrongPassword: false)
+            case "PW": passwordRequest = PasswordRequest(channel: channel, wrongPassword: true)
+            default: joinError = "Could not join \(channel.title): \(reason)"
+            }
             return
         }
 
@@ -403,16 +414,17 @@ final class RvrbClient {
         channelBotIds = RvrbClient.defaultBotIds
         djIds = []
         nowPlaying = nil
-        answeredTrackId = nil
+        answered = nil
     }
 
-    /// Join refusals look like "PR:Password required to join <title>": show the part after the code.
-    private static func describeJoinError(_ error: Error) -> String {
+    /// Join refusals look like "PR:Password required to join <title>": the code, and the part after it to show.
+    private static func describeJoinError(_ error: Error) -> (code: String?, reason: String) {
         let message = error.localizedDescription
         if let colon = message.firstIndex(of: ":"), (1...4).contains(message.distance(from: message.startIndex, to: colon)) {
-            return message[message.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            return (String(message[..<colon]),
+                    message[message.index(after: colon)...].trimmingCharacters(in: .whitespaces))
         }
-        return message
+        return (nil, message)
     }
 
     private func socketReady() {
@@ -705,11 +717,12 @@ final class RvrbClient {
             }
             setTrack(p)
 
-            // Our answer to nextChannelTrack is playing: take it off the queue (the server doesn't).
-            if let answered = answeredTrackId, p?["track"]?["id"]?.string == answered {
-                answeredTrackId = nil
+            // Our answer to nextChannelTrack is playing: take it off the queue, unless the server already has (it
+            // then also sends refreshDjStack).
+            if let answered, p?["track"]?["id"]?.string == answered.trackId {
+                self.answered = nil
                 Task {
-                    do { try await queue.removePlayed(trackId: answered) } catch {
+                    do { try await queue.removePlayed(trackId: answered.trackId, queueLength: answered.queueLength) } catch {
                         addNotice("Could not take the played track off your queue: \(error.localizedDescription)")
                     }
                 }
@@ -764,8 +777,17 @@ final class RvrbClient {
         }
     }
 
+    /// Someone blocked (or blocking): the server sends an "Unknown User" with this id in their place.
+    private static let blockedUserId = "#"
+
     private func updateUsers(_ list: [JSON]) {
-        users = list.compactMap { ChannelUser($0) }
+        // Several blocked people would share "#"; number them so each is its own row (still without a profile).
+        var blocked = 0
+        users = list.compactMap { json -> ChannelUser? in
+            guard json["_id"]?.string == Self.blockedUserId else { return ChannelUser(json) }
+            blocked += 1
+            return ChannelUser(json, id: "\(Self.blockedUserId)\(blocked)")
+        }
             .sorted { ($0.role, $1.name.lowercased()) > ($1.role, $0.name.lowercased()) }
         names = Dictionary(users.map { ($0.id, $0.name) }) { first, _ in first }
         usersById = Dictionary(users.map { ($0.id, $0) }) { first, _ in first }
@@ -990,7 +1012,7 @@ final class RvrbClient {
             throw RvrbError.server("The queue is empty")
         }
 
-        answeredTrackId = track.id
+        answered = (track.id, queue.total)
         return ["track": track.json]
     }
 
@@ -1040,4 +1062,11 @@ final class RvrbClient {
             addNotice("Could not load your queue: \(error.localizedDescription)")
         }
     }
+}
+
+/// A join refused for want of the right password.
+struct PasswordRequest {
+    let channel: Channel
+    /// A password was sent and it was wrong (otherwise none was).
+    let wrongPassword: Bool
 }
