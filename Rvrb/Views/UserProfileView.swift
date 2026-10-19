@@ -279,7 +279,7 @@ private struct StatisticsRow: View {
             HStack {
                 stat("Dopes", "hand.thumbsup.fill", .green, period?["dopes"])
                 stat("Nopes", "hand.thumbsdown.fill", .red, period?["nopes"])
-                stat("Bookmarks", "star.fill", .yellow, period?["bookmarks"])
+                stat("Favorites", "bookmark.fill", .yellow, period?["bookmarks"])
                 stat("Score", "sparkles", .accentColor, period?["score"])
             }
         }

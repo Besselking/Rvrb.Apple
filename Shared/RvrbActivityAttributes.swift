@@ -8,7 +8,7 @@ import Foundation
 /// widget extension, which draws it.
 nonisolated struct RvrbActivityAttributes: ActivityAttributes {
     nonisolated struct ContentState: Codable, Hashable {
-        /// What a vote from the activity did ("Doped", "Already starred", …); shown until the content goes stale
+        /// What a vote from the activity did ("Doped", "Already favorited", …); shown until the content goes stale
         /// a few seconds later.
         var confirmation: String?
     }

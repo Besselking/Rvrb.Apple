@@ -94,7 +94,7 @@ struct Avatar: View {
     let url: URL?
     let seed: String
     var activity: UserActivity = .listening
-    /// Starred (bookmarked) the playing track: a star at the top, besides any other badge.
+    /// Favorited (bookmarked) the playing track: a bookmark at the top, besides any other badge.
     var starred = false
     var size: CGFloat = Avatar.size
 
@@ -108,7 +108,7 @@ struct Avatar: View {
     @ViewBuilder
     private var starBadge: some View {
         if starred {
-            Image(systemName: "star.fill")
+            Image(systemName: "bookmark.fill")
                 .font(.system(size: size * 0.26, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(width: size * 0.44, height: size * 0.44)

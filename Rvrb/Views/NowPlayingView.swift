@@ -121,7 +121,7 @@ private struct VoteBar: View {
     @State private var confirmsSkip = false
 
     var body: some View {
-        // Voting on your own track fails with "Cannot vote for yourself".
+        // Voting on your own track fails with "Cannot vote for yourself"; favoriting it still works.
         let disabled = client.isMyTurn
 
         HStack(spacing: 8) {
@@ -150,17 +150,19 @@ private struct VoteBar: View {
 
     private func votes(disabled: Bool) -> some View {
         HStack(spacing: 8) {
-            VoteButton(title: "Dope", systemImage: "hand.thumbsup", count: votes.dope, isOn: votes.mine.dope, tint: .green) {
-                Task { await client.vote(.dope) }
+            Group {
+                VoteButton(title: "Dope", systemImage: "hand.thumbsup", count: votes.dope, isOn: votes.mine.dope, tint: .green) {
+                    Task { await client.vote(.dope) }
+                }
+                VoteButton(title: "Nope", systemImage: "hand.thumbsdown", count: votes.nope, isOn: votes.mine.nope, tint: .red) {
+                    Task { await client.vote(.nope) }
+                }
             }
-            VoteButton(title: "Nope", systemImage: "hand.thumbsdown", count: votes.nope, isOn: votes.mine.nope, tint: .red) {
-                Task { await client.vote(.nope) }
-            }
-            VoteButton(title: "Star", systemImage: "star", count: votes.star, isOn: votes.mine.star, tint: .yellow) {
+            .disabled(disabled)
+            VoteButton(title: "Favorite", systemImage: "bookmark", count: votes.star, isOn: votes.mine.star, tint: .yellow) {
                 Task { await client.vote(.star) }
             }
         }
-        .disabled(disabled)
     }
 }
 

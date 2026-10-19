@@ -112,6 +112,8 @@ final class RvrbClient {
     /// once it starts playing, unless the server already did.
     @ObservationIgnored private var answered: (trackId: String, queueLength: Int)?
     @ObservationIgnored private var starredPlaylist: String?
+    /// The user's own playing track, favorited: not a vote (the server refuses those), so it isn't in the meter.
+    @ObservationIgnored private var favoritedOwnTrackId: String?
     /// "@name" mentions to highlight: the display name and the username.
     @ObservationIgnored private let mentions: [String]
     @ObservationIgnored private var isHidden = RvrbClient.launchedInBackground
@@ -297,7 +299,7 @@ final class RvrbClient {
         return .listening
     }
 
-    /// Whether the user starred (bookmarked) the playing track.
+    /// Whether the user favorited (bookmarked) the playing track.
     func hasStarred(_ userId: String) -> Bool {
         voters[userId]?.star == true
     }
@@ -838,6 +840,11 @@ final class RvrbClient {
             }
         }
 
+        if favoritedOwnTrackId == playing.track.id {
+            tally.mine.star = true
+            byVoter[me.id, default: MyVote()].star = true
+        }
+
         playing.votes = tally
         nowPlaying = playing
         // Plain totals say nothing about who voted: keep what's known.
@@ -845,9 +852,20 @@ final class RvrbClient {
     }
 
     /// Toggles a vote. Only the toggled key is sent, so a vote made in another client isn't overwritten. Dope and
-    /// nope exclude each other on the server; star (a bookmark) is separate.
+    /// nope exclude each other on the server; star (the web app's favorite, a bookmark) is separate.
     func vote(_ kind: VoteKind) async {
         guard channel != nil, let playing = nowPlaying else { return }
+
+        // Your own track can't be voted on, but it can be favorited: only into the playlist, not counted.
+        if isMyTurn {
+            guard kind == .star else { return }
+            let favorite = !playing.votes.mine.star
+            favoritedOwnTrackId = favorite ? playing.track.id : nil
+            nowPlaying?.votes.mine.star = favorite
+            voters[me.id, default: MyVote()].star = favorite
+            if favorite, let uri = playing.track.uri { await bookmark(uri, title: playing.track.name) }
+            return
+        }
 
         var next = playing.votes.mine
         let params: JSON
@@ -875,7 +893,7 @@ final class RvrbClient {
                 voters[me.id] = next
             }
 
-            // The server records the star but doesn't touch the bookmark playlist; the web app adds it itself.
+            // The server records the favorite but doesn't touch the playlist; the web app adds it itself.
             if kind == .star, next.star, let uri = playing.track.uri {
                 await bookmark(uri, title: playing.track.name)
             }
@@ -915,13 +933,13 @@ final class RvrbClient {
     /// adds one (switching between dope and nope), never takes one back. Returns what it did.
     private func addVote(_ kind: VoteKind) async -> String {
         guard let playing = nowPlaying else { return "Nothing is playing" }
-        guard !isMyTurn else { return "You're playing this one" }
+        guard !isMyTurn || kind == .star else { return "You're playing this one" }
 
         let mine = playing.votes.mine
         let (already, done) = switch kind {
         case .dope: (mine.dope, "Doped")
         case .nope: (mine.nope, "Noped")
-        case .star: (mine.star, "Starred")
+        case .star: (mine.star, "Favorited")
         }
         guard !already else { return "Already \(done.lowercased())" }
 
@@ -940,9 +958,9 @@ final class RvrbClient {
         do {
             if starredPlaylist == nil { starredPlaylist = try await api.starredPlaylistURI() }
             try await api.addToPlaylist(starredPlaylist!, trackURIs: [uri])
-            addNotice("Bookmarked \(title).")
+            addNotice("Added \(title) to your favorites.")
         } catch {
-            addNotice("Starred, but not added to your bookmark playlist: \(error.localizedDescription)")
+            addNotice("Favorited, but not added to your favorites playlist: \(error.localizedDescription)")
         }
     }
 

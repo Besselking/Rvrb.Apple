@@ -241,7 +241,7 @@ private struct HistoryRow: View {
                 let votes = Self.tally(entry["voteSummary"])
                 if votes.dope > 0 { Label("\(votes.dope)", systemImage: "hand.thumbsup.fill").foregroundStyle(.green) }
                 if votes.nope > 0 { Label("\(votes.nope)", systemImage: "hand.thumbsdown.fill").foregroundStyle(.red) }
-                if votes.star > 0 { Label("\(votes.star)", systemImage: "star.fill").foregroundStyle(.yellow) }
+                if votes.star > 0 { Label("\(votes.star)", systemImage: "bookmark.fill").foregroundStyle(.yellow) }
             }
             .font(.caption2.monospacedDigit())
             .labelStyle(.titleAndIcon)

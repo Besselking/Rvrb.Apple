@@ -12,7 +12,7 @@ struct RvrbWidgetsBundle: WidgetBundle {
 
 private let accent = Color(red: 0.553, green: 0.361, blue: 0.902)
 
-/// The joined channel with Dope, Nope and Star buttons that vote on whatever is playing. No track details or
+/// The joined channel with Dope, Nope and Favorite buttons that vote on whatever is playing. No track details or
 /// counts: they'd be stale while the app sleeps.
 struct ChannelLiveActivity: Widget {
     var body: some WidgetConfiguration {
@@ -94,7 +94,7 @@ private struct VoteButtons: View {
         HStack(spacing: 8) {
             button("dope", title: "Dope", icon: "hand.thumbsup.fill", tint: .green)
             button("nope", title: "Nope", icon: "hand.thumbsdown.fill", tint: .red)
-            button("star", title: "Star", icon: "star.fill", tint: .yellow)
+            button("star", title: "Favorite", icon: "bookmark.fill", tint: .yellow)
         }
     }
 
