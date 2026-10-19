@@ -8,8 +8,9 @@ enum ChatText {
         case data(Data)
     }
 
-    /// How the web app draws an image, from its classes: `circular` (Semantic UI's round image) and `spin` (RVRB's
-    /// one turn a second, which the A&E channel's /spin command uses on album art).
+    /// How the web app draws an image, from its classes: `rounded-full` (a round image; `circular` before the web app
+    /// left Semantic UI, still in older chat) and `spin` (RVRB's one turn a second, which the A&E channel's /spin
+    /// command uses on album art).
     struct ImageStyle: Hashable {
         var circular = false
         var spins = false
@@ -51,7 +52,7 @@ enum ChatText {
             if let tag = Range(match.range, in: html).map({ String(html[$0]) }),
                let classes = classAttribute.firstMatch(in: tag, range: NSRange(tag.startIndex..., in: tag))?.group(1, in: tag) {
                 let names = Set(classes.split(whereSeparator: \.isWhitespace).map { $0.lowercased() })
-                let style = ImageStyle(circular: names.contains("circular"), spins: names.contains("spin"))
+                let style = ImageStyle(circular: !names.isDisjoint(with: ["rounded-full", "circular"]), spins: names.contains("spin"))
                 if style != ImageStyle() { styles[image] = style }
             }
         }

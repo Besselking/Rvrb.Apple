@@ -224,7 +224,7 @@ private struct ChatImageView: View {
             .frame(maxWidth: 260, minHeight: Self.height, maxHeight: Self.height, alignment: .leading)
     }
 
-    /// As the web app's CSS: `circular` is a round image, `spin` one turn a second, forever (not with Reduce Motion).
+    /// As the web app's CSS: `rounded-full` is a round image, `spin` one turn a second, forever (not with Reduce Motion).
     private var styled: some View {
         let side = Self.height
         let picture = RemoteImage(source: image, maxPixelSize: side * 3, contentMode: style.circular ? .fill : .fit) {
