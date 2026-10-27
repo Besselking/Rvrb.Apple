@@ -44,9 +44,9 @@ struct ChatView: View {
                                     client.replyingTo = message
                                 }
                             }
-                            if !message.body.plain.isEmpty {
+                            if !message.body.summary.isEmpty {
                                 Button("Copy", systemImage: "doc.on.doc") {
-                                    copyToPasteboard(message.body.plain)
+                                    copyToPasteboard(message.body.summary)
                                 }
                             }
                         }
@@ -166,13 +166,20 @@ struct MessageRow: View {
                             .onTapGesture { if let repliedTo { onShowOriginal(repliedTo) } }
                     }
 
-                    if !message.body.plain.isEmpty {
-                        Text(message.body.text)
-                            #if os(macOS)
-                            // On iPhone a long press opens the Reply/Copy menu instead.
-                            .textSelection(.enabled)
-                            #endif
-                            .fixedSize(horizontal: false, vertical: true)
+                    if message.body.tables.isEmpty {
+                        if !message.body.plain.isEmpty {
+                            text(message.body.text)
+                        }
+                    } else {
+                        // Each table in its place in the text.
+                        ForEach(message.body.parts.indices, id: \.self) { index in
+                            if !message.body.parts[index].characters.isEmpty {
+                                text(message.body.parts[index])
+                            }
+                            if message.body.tables.indices.contains(index) {
+                                ChatTableView(table: message.body.tables[index])
+                            }
+                        }
                     }
 
                     ForEach(message.body.images, id: \.self) { image in
@@ -186,6 +193,15 @@ struct MessageRow: View {
             .padding(.bottom, 1)
             .background(background)
         }
+    }
+
+    private func text(_ text: AttributedString) -> some View {
+        Text(text)
+            #if os(macOS)
+            // On iPhone a long press opens the Reply/Copy menu instead.
+            .textSelection(.enabled)
+            #endif
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private var background: Color {
@@ -283,7 +299,7 @@ struct ReplyQuote: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(original.map { Avatar.color(for: $0.userId ?? $0.name) } ?? .secondary)
                 if let original {
-                    Text(original.body.plain.isEmpty ? "Image" : original.body.plain)
+                    Text(original.body.summary.isEmpty ? "Image" : original.body.summary)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(lineLimit)
@@ -293,7 +309,7 @@ struct ReplyQuote: View {
         .fixedSize(horizontal: false, vertical: true)
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(original.map { "Reply to \($0.name): \($0.body.plain)" } ?? "Reply to an earlier message")
+        .accessibilityLabel(original.map { "Reply to \($0.name): \($0.body.summary)" } ?? "Reply to an earlier message")
     }
 }
 
@@ -369,7 +385,19 @@ private struct HorizontalSwipe: UIGestureRecognizerRepresentable {
         func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
             guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
             let velocity = pan.velocity(in: pan.view)
-            return velocity.x < 0 && abs(velocity.x) > abs(velocity.y) * 1.5
+            return velocity.x < 0 && abs(velocity.x) > abs(velocity.y) * 1.5 && !startsInSideScroller(pan)
+        }
+
+        /// A swipe on a table that's wider than the chat scrolls the table instead.
+        private func startsInSideScroller(_ pan: UIPanGestureRecognizer) -> Bool {
+            guard let view = pan.view, let hit = view.hitTest(pan.location(in: view), with: nil) else { return false }
+            var current: UIView? = hit
+            while let candidate = current, candidate !== view.superview {
+                if let scroller = candidate as? UIScrollView,
+                   scroller.contentSize.width > scroller.bounds.width + 1 { return true }
+                current = candidate.superview
+            }
+            return false
         }
     }
 }

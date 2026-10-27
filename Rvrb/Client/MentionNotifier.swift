@@ -34,7 +34,7 @@ final class MentionNotifier: NSObject, UNUserNotificationCenterDelegate {
             let content = UNMutableNotificationContent()
             content.title = message.kind == .whisper ? "\(message.name) whispered" : message.name
             content.subtitle = channel
-            content.body = message.body.plain.isEmpty ? "Sent an image" : message.body.plain
+            content.body = message.body.summary.isEmpty ? "Sent an image" : message.body.summary
             content.sound = .default
             content.threadIdentifier = channel
 

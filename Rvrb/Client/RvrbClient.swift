@@ -626,7 +626,9 @@ final class RvrbClient {
             let summaryBody = ChatText.parse(.string(summary))
             body = ChatText.Body(text: summaryBody.text + "\n" + body.text, plain: summaryBody.plain + "\n" + body.plain,
                                  images: summaryBody.images + body.images,
-                                 styles: summaryBody.styles.merging(body.styles) { first, _ in first })
+                                 styles: summaryBody.styles.merging(body.styles) { first, _ in first },
+                                 tables: body.tables,
+                                 parts: body.parts.isEmpty ? [] : [summaryBody.text + "\n" + body.parts[0]] + body.parts.dropFirst())
         }
 
         let kind: ChatMessage.Kind = switch type {

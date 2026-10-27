@@ -1,7 +1,7 @@
 import Foundation
 
-/// Turns RVRB chat payloads (HTML sanitised by the server: links, images, formatting) into attributed text plus the
-/// images to show under it. Tables arrive as objects and are shown as a placeholder.
+/// Turns RVRB chat payloads (HTML sanitised by the server: links, images, formatting, tables) into attributed text
+/// plus the tables and images to show under it. Tables sent as objects (`format: table`) are shown as a placeholder.
 enum ChatText {
     enum Image: Hashable {
         case url(URL)
@@ -16,24 +16,58 @@ enum ChatText {
         var spins = false
     }
 
+    /// An HTML table, drawn as a grid: rows of cells, each parsed like a message of its own.
+    struct Table {
+        struct Cell {
+            var body: Body
+            /// A `<th>`, or any cell of the `<thead>`.
+            var isHeader: Bool
+            var columns: Int
+        }
+
+        var rows: [[Cell]]
+
+        var columnCount: Int {
+            rows.map { $0.reduce(0) { $0 + $1.columns } }.max() ?? 0
+        }
+
+        /// The cells' text, a row a line, for copying and notifications.
+        var plain: String {
+            rows.map { $0.map(\.body.plain).joined(separator: "\t") }.joined(separator: "\n")
+        }
+    }
+
     struct Body {
         var text: AttributedString
         var plain: String
         var images: [Image]
         /// Styles of the images that have any.
         var styles: [Image: ImageStyle] = [:]
+        var tables: [Table] = []
+        /// With tables: the text before, between and after them (one more than the tables, some maybe empty).
+        var parts: [AttributedString] = []
+
+        /// Text, or failing that the tables' text (to copy or notify).
+        var summary: String {
+            plain.isEmpty ? tables.map(\.plain).joined(separator: "\n\n") : plain
+        }
+
+        var isEmpty: Bool { plain.isEmpty && tables.isEmpty && images.isEmpty }
 
         static let empty = Body(text: "", plain: "", images: [])
     }
 
     static func parse(_ payload: JSON?) -> Body {
-        guard let html = payload?.string else {
+        guard let source = payload?.string else {
             return payload?.object != nil ? Body(text: "[table]", plain: "[table]", images: []) : .empty
         }
 
-        if html.hasPrefix("data:image") {
-            return Body(text: "", plain: "", images: dataImage(html).map { [$0] } ?? [])
+        if source.hasPrefix("data:image") {
+            return Body(text: "", plain: "", images: dataImage(source).map { [$0] } ?? [])
         }
+
+        // Tables come out first, so their cells' images and links stay in them.
+        let (html, tables) = extractTables(source)
 
         var images: [Image] = []
         var styles: [Image: ImageStyle] = [:]
@@ -117,7 +151,78 @@ enum ChatText {
         result += linkified(String(rest))
         plain += rest
 
-        return Body(text: result, plain: plain, images: images, styles: styles)
+        guard !tables.isEmpty else { return Body(text: result, plain: plain, images: images, styles: styles) }
+
+        // The text around the tables, so they can be drawn in their places.
+        var parts: [AttributedString] = []
+        var start = result.startIndex
+        for index in result.characters.indices where result.characters[index] == tableMark {
+            parts.append(trimmed(result[start..<index]))
+            start = result.characters.index(after: index)
+        }
+        parts.append(trimmed(result[start...]))
+
+        let joined = parts.filter { !$0.characters.isEmpty }.reduce(into: AttributedString()) { joined, part in
+            if !joined.characters.isEmpty { joined += "\n" }
+            joined += part
+        }
+        return Body(text: joined, plain: String(joined.characters), images: images, styles: styles, tables: tables,
+                    parts: parts)
+    }
+
+    /// Stands in for a table in the text while it's parsed (a private-use character, as the links' placeholders).
+    private static let tableMark: Character = "\u{E002}"
+
+    private static func trimmed(_ text: AttributedSubstring) -> AttributedString {
+        var text = AttributedString(text)
+        while let first = text.characters.first, first.isWhitespace {
+            text.removeSubrange(text.startIndex..<text.characters.index(after: text.startIndex))
+        }
+        while let last = text.characters.last, last.isWhitespace {
+            text.removeSubrange(text.characters.index(before: text.endIndex)..<text.endIndex)
+        }
+        return text
+    }
+
+    /// The HTML without its tables (each leaves `tableMark` on a line of its own), and the tables.
+    private static func extractTables(_ html: String) -> (String, [Table]) {
+        let matches = tableTag.matches(html)
+        guard !matches.isEmpty else { return (html, []) }
+
+        var rest = ""
+        var tables: [Table] = []
+        var cursor = html.startIndex
+        for match in matches {
+            guard let range = Range(match.range, in: html) else { continue }
+            rest += html[cursor..<range.lowerBound] + "\n\(tableMark)\n"
+            if let table = table(match.group(1, in: html) ?? "") { tables.append(table) }
+            cursor = range.upperBound
+        }
+        return (rest + html[cursor...], tables)
+    }
+
+    /// The rows and cells inside `<table>…</table>`. A cell without its closing tag ends where the next one starts.
+    private static func table(_ html: String) -> Table? {
+        var rows: [[Table.Cell]] = []
+        for row in tableRow.matches(html) {
+            guard let content = row.group(1, in: html) else { continue }
+            let inHead = Range(row.range, in: html).map { range in
+                let before = html[..<range.lowerBound]
+                guard let open = before.range(of: "<thead", options: [.caseInsensitive, .backwards]) else { return false }
+                return before[open.upperBound...].range(of: "</thead", options: .caseInsensitive) == nil
+            } ?? false
+
+            let cells = tableCell.matches(content).compactMap { cell -> Table.Cell? in
+                guard let name = cell.group(1, in: content) else { return nil }
+                let attributes = cell.group(2, in: content) ?? ""
+                let columns = columnSpan.firstMatch(in: attributes, range: NSRange(attributes.startIndex..., in: attributes))?
+                    .group(1, in: attributes).flatMap(Int.init) ?? 1
+                return Table.Cell(body: parse(.string(cell.group(3, in: content) ?? "")),
+                                  isHeader: inHead || name.lowercased() == "th", columns: max(1, min(columns, 20)))
+            }
+            if !cells.isEmpty { rows.append(cells) }
+        }
+        return rows.isEmpty ? nil : Table(rows: rows)
     }
 
     /// Plain text with any bare URLs made into links.
@@ -172,6 +277,10 @@ enum ChatText {
         "trade": "™", "middot": "·", "bull": "•", "times": "×", "eacute": "é", "euro": "€",
     ]
 
+    private static let tableTag = regex(#"<table\b[^>]*>(.*?)(?:</table\s*>|$)"#)
+    private static let tableRow = regex(#"<tr\b[^>]*>(.*?)(?=</tr\s*>|<tr\b|</tbody|</thead|</tfoot|$)"#)
+    private static let tableCell = regex(#"<(td|th)\b([^>]*)>(.*?)(?=</t[dh]\s*>|<t[dh]\b|$)"#)
+    private static let columnSpan = regex(#"\bcolspan\s*=\s*["']?(\d+)"#)
     private static let imageTag = regex(#"<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["'][^>]*>|<img\b[^>]*>"#)
     private static let classAttribute = regex(#"\bclass\s*=\s*["']([^"']*)["']"#)
     private static let lineBreak = regex(#"<br\s*/?>|</p>|</div>|</li>|</h[1-6]>"#)
