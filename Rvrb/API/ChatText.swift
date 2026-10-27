@@ -52,7 +52,7 @@ enum ChatText {
             if let tag = Range(match.range, in: html).map({ String(html[$0]) }),
                let classes = classAttribute.firstMatch(in: tag, range: NSRange(tag.startIndex..., in: tag))?.group(1, in: tag) {
                 let names = Set(classes.split(whereSeparator: \.isWhitespace).map { $0.lowercased() })
-                let style = ImageStyle(circular: !names.isDisjoint(with: ["rounded-full", "circular"]), spins: names.contains("spin"))
+                let style = ImageStyle(circular: !names.isDisjoint(with: ["rounded-full", "circular"]), spins: !names.isDisjoint(with: ["fa-spin", "spin"]))
                 if style != ImageStyle() { styles[image] = style }
             }
         }
